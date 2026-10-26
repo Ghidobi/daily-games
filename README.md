@@ -1,0 +1,116 @@
+# Daily Games
+
+App desktop per Windows (e in futuro Mac) che raccoglie in un unico posto i giochi giornalieri:
+ogni gioco si apre in una scheda propria, con il sito originale, i colori del gioco e l'accesso
+che resta salvato tra un avvio e l'altro.
+
+Giochi iniziali: [Spotle Movies](https://spotle.movie/), [Farflung](https://farflung.game/),
+[Krillion](https://krillion.io/), [Spotle TV](https://www.spotle.tv/).
+
+> **Stato:** fase 1 (scheletro). Statistiche, registrazione dei risultati, scoperta di nuovi
+> giochi, installer e aggiornamenti automatici arriveranno nelle fasi successive.
+
+## Cosa fa (fase 1)
+
+- **Una scheda per gioco** con una vista web vera (Electron `WebContentsView`, non iframe),
+  intestazione e bordo nei colori del gioco, icona scaricata dalla favicon del sito all'avvio.
+- **Accesso persistente:** ogni gioco ha una sessione separata e permanente (cookie, localStorage).
+- **Link esterni** (pubblicità, social) e finestre non di login si aprono nel browser predefinito.
+- **Pagina "Oggi"** con lo stato di ogni gioco (da giocare / giocato), che si azzera a mezzanotte
+  ora di Roma, e il pulsante **Prossimo gioco**.
+- **Tema** chiaro, scuro o di sistema; barra laterale compatta sugli schermi piccoli.
+
+### Scorciatoie da tastiera
+
+| Tasti | Azione |
+|---|---|
+| `Ctrl+1` … `Ctrl+9` | Apri il gioco n. 1…9 |
+| `Ctrl+0` | Pagina Oggi |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Scheda successiva / precedente |
+| `Ctrl+N` | Prossimo gioco da giocare |
+| `F5` o `Ctrl+R` | Ricarica il gioco |
+| `Alt+←` | Indietro nel gioco |
+| `F12` | Strumenti per sviluppatori |
+
+## Accesso con Google
+
+Google spesso blocca l'accesso dai browser "incorporati". L'app fa così:
+
+1. Tutte le schede dei giochi si presentano come un **Chrome standard** (user agent e
+   intestazioni senza "Electron").
+2. Se un gioco apre un **popup di accesso** (Google, Apple, Facebook, Microsoft, Discord…), il
+   popup si apre in una finestra dell'app che usa **la stessa sessione del gioco**, così dopo il
+   login il gioco ti riconosce.
+3. Se Google rifiuta comunque l'accesso, l'app chiude il popup e propone **Apri nel browser**
+   (c'è anche sempre il pulsante con la freccia nell'intestazione della scheda). Attenzione: un
+   accesso fatto nel browser esterno resta nel browser, non passa all'app.
+
+Nota: i 4 giochi iniziali non richiedono un account; salvano i progressi nel sito stesso
+(localStorage), che l'app conserva.
+
+## Avviare l'app in sviluppo
+
+Servono [Node.js](https://nodejs.org/) (versione LTS) e [Git](https://git-scm.com/).
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Se all'avvio compare l'errore "Electron failed to install correctly", scarica il programma
+Electron a mano e riprova:
+
+```bash
+node node_modules/electron/install.js
+```
+
+Altri comandi:
+
+| Comando | Cosa fa |
+|---|---|
+| `npm run build` | Compila l'app nella cartella `out/` |
+| `npm start` | Avvia la versione compilata |
+| `npm run typecheck` | Controlla i tipi TypeScript |
+
+## Dove sono i dati
+
+Tutti i dati personali restano sul PC, nella cartella dell'utente, **mai nel progetto o nel
+pacchetto di installazione**:
+
+- Windows: `%APPDATA%\Daily Games\`
+  - `data.json`: raccolta dei giochi, stato dei giorni, impostazioni
+  - `Partitions\game-*`: sessioni e accessi dei singoli giochi
+  - `icons\`: icone dei giochi scaricate dai siti
+
+Per ricominciare da zero basta chiudere l'app e cancellare quella cartella.
+
+## Struttura del progetto
+
+```
+src/
+  main/        processo principale Electron
+    index.ts      finestra, scorciatoie, comunicazione con l'interfaccia
+    gameViews.ts  una vista web per gioco, popup di login, link esterni
+    web.ts        user agent, domini di login, regole sui link
+    store.ts      salvataggio dei dati (data.json)
+    day.ts        giornata secondo il fuso Europe/Rome
+    icons.ts      download delle favicon
+    catalog.ts    i giochi iniziali con i loro colori
+  preload/     ponte sicuro tra interfaccia e processo principale
+  renderer/    interfaccia React (barra laterale, Oggi, schede)
+  shared/      tipi condivisi
+```
+
+## Compilare e installare
+
+L'installer per Windows (electron-builder), la distribuzione agli amici e gli aggiornamenti
+automatici tramite GitHub Releases arriveranno nella fase 5. Già adesso è bene sapere che, senza
+una firma digitale a pagamento, **Windows mostrerà l'avviso "Windows ha protetto il PC"**
+all'installazione: si supera con **Ulteriori informazioni → Esegui comunque**.
+
+## Idee per il futuro
+
+- Classifiche condivise con gli amici e account online (richiedono un server).
