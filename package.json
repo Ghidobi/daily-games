@@ -1,7 +1,7 @@
 {
   "name": "daily-games",
   "productName": "Daily Games",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tutti i tuoi giochi giornalieri in un'unica app desktop.",
   "main": "out/main/index.js",
   "author": "Daily Games",
@@ -12,21 +12,51 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"tests/*.test.mts\""
+    "test": "node --test \"tests/*.test.mts\"",
+    "dist": "electron-vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "app.dailygames.desktop",
+    "productName": "Daily Games",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Daily Games",
+      "artifactName": "Daily-Games-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Daily-Games-${version}-portatile.${ext}"
+    }
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
-  },
-  "dependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
   }
 }

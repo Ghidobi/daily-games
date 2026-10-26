@@ -149,10 +149,31 @@ tests/         test automatici (npm test)
 
 ## Compilare e installare
 
-L'installer per Windows (electron-builder), la distribuzione agli amici e gli aggiornamenti
-automatici tramite GitHub Releases arriveranno nella fase 5. Già adesso è bene sapere che, senza
-una firma digitale a pagamento, **Windows mostrerà l'avviso "Windows ha protetto il PC"**
-all'installazione: si supera con **Ulteriori informazioni → Esegui comunque**.
+```bash
+npm run dist
+```
+
+Crea nella cartella `release/` due file:
+
+| File | Cosa è |
+|---|---|
+| `Daily-Games-Setup-<versione>.exe` | **Installer**: installa l'app per il tuo utente, con collegamento sul desktop e nel menu Start. Si disinstalla da Impostazioni → App. |
+| `Daily-Games-<versione>-portatile.exe` | **Versione portatile**: un solo file, si avvia con doppio clic senza installare nulla (il primo avvio impiega qualche secondo in più). |
+
+Entrambe usano gli stessi dati in `%APPDATA%\Daily Games\`, quindi accessi e statistiche restano
+anche passando da una all'altra o aggiornando.
+
+**Avviso di Windows:** l'app non ha una firma digitale (costa qualche centinaio di euro l'anno),
+quindi al primo avvio Windows mostra **"Windows ha protetto il PC"**. Per proseguire clicca
+**Ulteriori informazioni → Esegui comunque**. Se il browser segnala il download come insolito,
+scegli **Mantieni**.
+
+La distribuzione agli amici e gli aggiornamenti automatici tramite GitHub Releases arriveranno
+nella fase 5.
+
+Nota: con le versioni recenti di npm gli script di installazione dei pacchetti sono bloccati
+finché non li approvi; se Electron non parte dopo `npm install`, esegui
+`node node_modules/electron/install.js` (vedi sopra).
 
 ## Idee per il futuro
 
