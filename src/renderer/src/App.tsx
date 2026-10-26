@@ -6,6 +6,7 @@ import { GamePage } from './components/GamePage'
 import { StatsPage } from './components/StatsPage'
 import { CollectionPage } from './components/CollectionPage'
 import { SettingsPage } from './components/SettingsPage'
+import { DiscoverPage } from './components/DiscoverPage'
 import { PasteDialog } from './components/PasteDialog'
 import { Toast } from './components/Toast'
 import { useResolvedTheme } from './theme'
@@ -28,7 +29,7 @@ export function App() {
 
   if (!state) return <div className="boot" />
 
-  const game = state.games.find((g) => g.id === state.active)
+  const game = state.trial?.id === state.active ? state.trial : state.games.find((g) => g.id === state.active)
   const games = state.games.filter((g) => !g.hidden)
 
   return (
@@ -44,6 +45,8 @@ export function App() {
           <CollectionPage state={state} />
         ) : state.active === 'settings' ? (
           <SettingsPage state={state} />
+        ) : state.active === 'discover' ? (
+          <DiscoverPage state={state} />
         ) : (
           <TodayPage state={state} onPaste={openPaste} />
         )}

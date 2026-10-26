@@ -72,7 +72,7 @@ export interface GameViewStatus {
 }
 
 /** Pagine dell'app oltre alle schede dei giochi. */
-export type PageId = 'today' | 'stats' | 'collection' | 'settings'
+export type PageId = 'today' | 'stats' | 'collection' | 'settings' | 'discover'
 
 export interface Toast {
   id: number
@@ -103,11 +103,40 @@ export interface AppState {
   toast?: Toast
   /** Cresce a ogni modifica dello storico: l'interfaccia lo usa per ricaricarlo. */
   dataVersion: number
+  discovery: DiscoveryState
+  /** Gioco aperto in prova (non fa parte della raccolta). */
+  trial?: Game
   /** Serie di giorni consecutivi (totale e per gioco). */
   streaks: { total: number; games: Record<string, number> }
 }
 
 export type AddGameResult = { ok: true; game: Game; warning?: string } | { ok: false; error: string }
+
+/** Gioco proposto da "Scopri nuovi giochi". */
+export interface Suggestion {
+  id: string
+  name: string
+  url: string
+  description: string
+  category: string
+  /** Perché potrebbe piacerti, rispetto ai giochi che hai già. */
+  reason?: string
+  /** ISO timestamp della ricerca che l'ha trovato. */
+  foundAt: string
+  status: 'new' | 'added' | 'discarded'
+}
+
+export interface DiscoveryState {
+  hasKey: boolean
+  /** Ultime cifre della chiave salvata, es. "…AbCd". */
+  keyHint?: string
+  searching: boolean
+  error?: string
+  /** Stima in dollari del costo dell'ultima ricerca. */
+  lastCost?: number
+  lastSearchAt?: string
+  suggestions: Suggestion[]
+}
 
 /** Esito dell'analisi di un testo incollato a mano. */
 export interface ParsePreview {
@@ -152,4 +181,16 @@ export interface Api {
   testReminder(): void
   exportData(): Promise<{ ok: boolean; path?: string; error?: string }>
   importData(): Promise<{ ok: boolean; error?: string; canceled?: boolean }>
+  /** Salva la chiave API (dopo averla verificata con Anthropic). */
+  setApiKey(key: string): Promise<{ ok: boolean; error?: string }>
+  removeApiKey(): void
+  /** Cerca nuovi giochi online. */
+  discover(): Promise<{ ok: boolean; count?: number; error?: string }>
+  trySuggestion(id: string): void
+  addSuggestion(id: string): Promise<AddGameResult>
+  discardSuggestion(id: string): void
+  restoreSuggestion(id: string): void
+  /** Aggiunge alla raccolta il gioco in prova. */
+  keepTrial(): Promise<AddGameResult>
+  closeTrial(): void
 }

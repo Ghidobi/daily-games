@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AppState, ThemeMode } from '@shared/types'
+import { ApiKeyForm } from './ApiKeyForm'
 import { Icon } from './Icon'
 
 function Switch({ checked, onChange, disabled, label }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string }) {
@@ -126,6 +127,17 @@ export function SettingsPage({ state }: { state: AppState }) {
             disabled={!state.packaged}
             onChange={(v) => window.api.updateSettings({ openAtLogin: v })}
           />
+        </div>
+      </section>
+
+      <section className="settings-card">
+        <h2>Scopri nuovi giochi</h2>
+        <div className="setting column">
+          <div>
+            <strong>Chiave API di Anthropic</strong>
+            <p>Serve per cercare nuovi giochi sul web. Le ricerche vengono addebitate sul tuo account Anthropic.</p>
+          </div>
+          <ApiKeyForm discovery={state.discovery} />
         </div>
       </section>
 

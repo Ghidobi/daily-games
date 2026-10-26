@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { DayEntry, DaysData, Game, GameResult, UserSettings } from '@shared/types'
+import type { DayEntry, DaysData, Game, GameResult, Suggestion, UserSettings } from '@shared/types'
 import { DEFAULT_GAMES } from '@shared/catalog'
 
 export interface WindowState {
@@ -19,6 +19,8 @@ export interface StoreData {
   settings: UserSettings & { window?: WindowState }
   /** Giorno in cui è già partito il promemoria (per non ripeterlo). */
   reminderSentOn?: string
+  /** Storico di "Scopri nuovi giochi". */
+  discovery: { suggestions: Suggestion[]; lastSearchAt?: string; lastCost?: number }
 }
 
 function defaults(): StoreData {
@@ -26,6 +28,7 @@ function defaults(): StoreData {
     version: 1,
     games: structuredClone(DEFAULT_GAMES),
     days: {},
+    discovery: { suggestions: [] },
     settings: {
       themeMode: 'system',
       reminder: { enabled: false, time: '21:00' },
@@ -45,6 +48,7 @@ function normalize(parsed: Partial<StoreData>): StoreData {
     ...parsed,
     games: Array.isArray(parsed.games) ? parsed.games : base.games,
     days: isObj(parsed.days) ? (parsed.days as DaysData) : {},
+    discovery: { suggestions: Array.isArray(parsed.discovery?.suggestions) ? parsed.discovery.suggestions : [], lastSearchAt: parsed.discovery?.lastSearchAt, lastCost: parsed.discovery?.lastCost },
     settings: {
       ...base.settings,
       ...parsed.settings,
@@ -61,6 +65,7 @@ export interface ExportFile {
   games: Game[]
   days: DaysData
   settings: Omit<UserSettings, 'openAtLogin'>
+  suggestions?: Suggestion[]
 }
 
 /** Controlla che un file importato sia un backup valido; restituisce un messaggio d'errore o null. */
@@ -139,14 +144,14 @@ export class Store {
 
   toExport(): ExportFile {
     const { window: _w, openAtLogin: _o, ...settings } = this.data.settings
-    return { app: 'daily-games', format: 1, exportedAt: new Date().toISOString(), games: this.data.games, days: this.data.days, settings }
+    return { app: 'daily-games', format: 1, exportedAt: new Date().toISOString(), games: this.data.games, days: this.data.days, settings, suggestions: this.data.discovery.suggestions }
   }
 
   /** Sostituisce raccolta, storico e impostazioni con quelli di un backup (già validato). */
   importFrom(file: ExportFile): void {
     this.backup('prima-di-importare')
     const { window, openAtLogin } = this.data.settings
-    this.data = normalize({ games: file.games, days: file.days, settings: { ...this.data.settings, ...file.settings, window, openAtLogin } })
+    this.data = normalize({ games: file.games, days: file.days, discovery: { suggestions: Array.isArray(file.suggestions) ? file.suggestions : [] }, settings: { ...this.data.settings, ...file.settings, window, openAtLogin } })
     this.flush()
   }
 

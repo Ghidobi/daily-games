@@ -48,6 +48,38 @@ export function Sidebar({ state }: { state: AppState }) {
         )
       )}
 
+      {page(
+        'discover',
+        'sparkle',
+        'Scopri',
+        'Scopri nuovi giochi',
+        state.discovery.searching ? (
+          <span className="spinner" />
+        ) : (
+          (() => {
+            const n = state.discovery.suggestions.filter((s) => s.status === 'new').length
+            return n > 0 ? <span className="nav-count new">{n}</span> : null
+          })()
+        )
+      )}
+
+      {state.trial && (
+        <div className={`nav-item trial${state.active === state.trial.id ? ' active' : ''}`}>
+          <button className="trial-open" onClick={() => window.api.open(state.trial!.id)} title={`In prova: ${state.trial.name}`}>
+            <span className="nav-icon">
+              <GameIcon game={state.trial} src={state.icons[state.trial.id]} size={26} />
+            </span>
+            <span className="nav-label">
+              <small>In prova</small>
+              {state.trial.name}
+            </span>
+          </button>
+          <button className="trial-close" onClick={() => window.api.closeTrial()} title="Chiudi la prova" aria-label="Chiudi la prova">
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="nav-section">I tuoi giochi</div>
       <ul className="game-list">
         {games.map((game, i) => {

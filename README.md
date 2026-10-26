@@ -7,8 +7,8 @@ che resta salvato tra un avvio e l'altro.
 Giochi iniziali: [Spotle Movies](https://spotle.movie/), [Farflung](https://farflung.game/),
 [Krillion](https://krillion.io/), [Spotle TV](https://www.spotle.tv/).
 
-> **Stato:** fase 3 (raccolta e uso quotidiano). La scoperta di nuovi giochi e gli aggiornamenti
-> automatici arriveranno nelle fasi successive.
+> **Stato:** fase 4 (scoperta di nuovi giochi). Gli aggiornamenti automatici e la distribuzione
+> agli amici arriveranno nella fase 5.
 
 ## Cosa fa
 
@@ -42,8 +42,28 @@ Giochi iniziali: [Spotle Movies](https://spotle.movie/), [Farflung](https://farf
     destro sull'icona → Esci per chiuderla davvero);
   - **avvio con Windows** (solo nell'app installata), ridotta nell'area di notifica;
   - **esporta / importa** raccolta, statistiche e impostazioni in un file JSON, per backup o per
-    passare a un altro PC. Gli accessi ai giochi non sono inclusi. Prima di ogni importazione
+    passare a un altro PC (incluso lo storico delle scoperte). Gli accessi ai giochi non sono inclusi. Prima di ogni importazione
     l'app salva una copia dei dati attuali in `%APPDATA%\Daily Games\backup\`.
+
+### Scopri nuovi giochi
+
+La pagina **Scopri** usa Claude (modello `claude-opus-5-5`) con lo strumento di ricerca web
+(`web_search_20260209`) dell'API di Anthropic per trovare giochi giornalieri simili ai tuoi.
+
+- **Chiave API:** ognuno usa la propria. Si crea su
+  [console.anthropic.com](https://console.anthropic.com/settings/keys) (serve un po' di credito in
+  «Billing») e si incolla nella pagina Scopri o nelle Impostazioni. L'app la verifica, la cifra con
+  Windows (DPAPI) e la salva in `%APPDATA%\Daily Games\secrets.json`: non è nel codice, non va
+  nel pacchetto, non finisce nei backup e non viene mai mostrata per intero.
+- **Costo:** ogni ricerca costa in genere qualche decina di centesimi di dollaro, addebitati sul
+  tuo account Anthropic; dopo ogni ricerca l'app mostra una stima.
+- Ogni proposta ha nome, descrizione, categoria, il motivo per cui potrebbe piacerti e tre
+  pulsanti: **Prova** (scheda temporanea: gli accessi fatti lì non restano salvati),
+  **Aggiungi** alla raccolta, **Scarta** (non verrà più riproposto).
+- La ricerca esclude i giochi che hai già e quelli già proposti; lo **storico delle scoperte**
+  resta in fondo alla pagina (da lì puoi anche ripristinare un gioco scartato).
+- Se il modello rifiuta una richiesta, l'API la ripete da sola su un modello di riserva
+  (parametro `fallbacks: "default"`).
 
 ### Come vengono riconosciuti i risultati
 
@@ -117,7 +137,7 @@ Altri comandi:
 | `npm run build` | Compila l'app nella cartella `out/` |
 | `npm start` | Avvia la versione compilata |
 | `npm run typecheck` | Controlla i tipi TypeScript |
-| `npm test` | Prova i riconoscitori dei risultati e il calcolo delle serie |
+| `npm test` | Prova riconoscitori dei risultati, serie e ricerca (con risposte simulate, senza costi) |
 
 Per provare l'app senza toccare i tuoi dati veri, avviala con un profilo separato
 (in PowerShell):
@@ -136,6 +156,7 @@ pacchetto di installazione**:
   - `Partitions\game-*`: sessioni e accessi dei singoli giochi
   - `icons\`: icone dei giochi scaricate dai siti
   - `backup\`: copie automatiche fatte prima di importare un backup
+  - `secrets.json`: la chiave API di Anthropic, cifrata (se l'hai inserita)
 
 Per ricominciare da zero basta chiudere l'app e cancellare quella cartella.
 
@@ -149,6 +170,8 @@ src/
     capture.ts    osservazione degli appunti per i risultati
     addGame.ts    aggiunta di un gioco da URL (nome, icona, colori)
     system.ts     area di notifica, notifiche, avvio con Windows
+    discover.ts   ricerca di nuovi giochi con l'API di Anthropic
+    secrets.ts    chiave API cifrata (safeStorage)
     web.ts        user agent, domini di login, regole sui link
     store.ts      salvataggio dei dati (data.json)
     day.ts        giornata secondo il fuso Europe/Rome

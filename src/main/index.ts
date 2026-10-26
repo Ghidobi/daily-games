@@ -2,14 +2,16 @@ import { BaseWindow, Menu, WebContentsView, app, dialog, ipcMain, nativeTheme, s
 import type { Event, Input, Tray } from 'electron'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AddGameResult, AppState, DayEntry, GameAction, GamePatch, PageId, ParsePreview, Rect, ThemeMode, UserSettings } from '@shared/types'
+import type { AddGameResult, AppState, DayEntry, Game, GameAction, GamePatch, PageId, ParsePreview, Rect, Suggestion, ThemeMode, UserSettings } from '@shared/types'
 import { compactForShare, detectResult, parseFor, summarize } from '@shared/results'
 import { streaks } from '@shared/stats'
 import { ClipboardWatcher } from './capture'
-import { buildGame, normalizeUrl } from './addGame'
+import { buildGame, normalizeUrl, themeFromColor } from './addGame'
+import { checkKey, explainError, runDiscovery } from './discover'
+import { getApiKey, maskKey, removeApiKey, setApiKey } from './secrets'
 import { DEFAULT_GAMES } from '@shared/catalog'
 import { romeDayKey, romeTime, watchDayChange } from './day'
-import { GameViews, gameSession } from './gameViews'
+import { GameViews, TRIAL_PREFIX, gameSession } from './gameViews'
 import { cachedIcon, fetchIcon, removeCachedIcon } from './icons'
 import { Store, validateExport } from './store'
 import type { ExportFile } from './store'
@@ -45,10 +47,14 @@ let watcher: ClipboardWatcher
 /** Ultimo risultato salvato, per "Annulla". */
 let lastCapture: { dayKey: string; gameId: string; previous?: DayEntry } | undefined
 const icons: Record<string, string> = {}
-const PAGES: PageId[] = ['today', 'stats', 'collection', 'settings']
+const PAGES: PageId[] = ['today', 'stats', 'collection', 'settings', 'discover']
+let trial: Game | undefined
+let keyHint: string | undefined
+let searching = false
+let discoverError: string | undefined
 
 const visibleGames = () => store.data.games.filter((g) => !g.hidden)
-const findGame = (id: string) => store.data.games.find((g) => g.id === id)
+const findGame = (id: string) => (trial?.id === id ? trial : store.data.games.find((g) => g.id === id))
 
 function snapshot(): AppState {
   return {
@@ -66,7 +72,17 @@ function snapshot(): AppState {
     notice,
     toast,
     dataVersion,
-    streaks: streaks(store.data.days, dayKey, visibleGames().map((g) => g.id))
+    streaks: streaks(store.data.days, dayKey, visibleGames().map((g) => g.id)),
+    discovery: {
+      hasKey: !!keyHint,
+      keyHint,
+      searching,
+      error: discoverError,
+      lastCost: store.data.discovery.lastCost,
+      lastSearchAt: store.data.discovery.lastSearchAt,
+      suggestions: store.data.discovery.suggestions
+    },
+    trial
   }
 }
 
@@ -281,6 +297,134 @@ async function addGame(input: string): Promise<AddGameResult> {
   return { ok: true, game, warning }
 }
 
+// ---- scopri nuovi giochi ----
+
+async function saveApiKey(key: string): Promise<{ ok: boolean; error?: string }> {
+  const k = key.trim()
+  if (!/^sk-ant-[\w-]{20,}$/.test(k)) return { ok: false, error: 'Non sembra una chiave API di Anthropic (inizia con "sk-ant-").' }
+  try {
+    await checkKey(k)
+    await setApiKey(k)
+  } catch (err) {
+    return { ok: false, error: explainError(err) }
+  }
+  keyHint = maskKey(k)
+  discoverError = undefined
+  showToast('Chiave API salvata')
+  broadcast()
+  return { ok: true }
+}
+
+const hostKey = (url: string) => {
+  try {
+    const u = new URL(url)
+    return u.hostname.replace(/^www\./, '') + u.pathname.replace(/\/$/, '')
+  } catch {
+    return url
+  }
+}
+
+async function discover(): Promise<{ ok: boolean; count?: number; error?: string }> {
+  if (searching) return { ok: false, error: 'Ricerca già in corso.' }
+  const key = await getApiKey()
+  if (!key) return { ok: false, error: 'Serve una chiave API: inseriscila qui sotto o nelle impostazioni.' }
+  searching = true
+  discoverError = undefined
+  broadcast()
+  try {
+    const known = store.data.discovery.suggestions
+    const { games, cost } = await runDiscovery(key, {
+      owned: store.data.games.map((g) => ({ name: g.name, url: g.url, category: g.category })),
+      excluded: known.slice(-80).map((s) => ({ name: s.name, url: s.url }))
+    })
+    // Esclude comunque ciò che hai già o che è già stato proposto (anche se il modello lo ripropone).
+    const seen = new Set([...store.data.games.map((g) => hostKey(g.url)), ...known.map((s) => hostKey(s.url))])
+    const names = new Set([...store.data.games, ...known].map((g) => g.name.toLowerCase()))
+    const now = new Date().toISOString()
+    const fresh: Suggestion[] = []
+    for (const g of games) {
+      const k = hostKey(g.url)
+      if (seen.has(k) || names.has(g.name.toLowerCase()) || !normalizeUrl(g.url)) continue
+      seen.add(k)
+      fresh.push({ ...g, id: Math.random().toString(36).slice(2, 10), foundAt: now, status: 'new' })
+    }
+    store.data.discovery.suggestions.push(...fresh)
+    store.data.discovery.lastSearchAt = now
+    store.data.discovery.lastCost = cost
+    store.save()
+    showToast(fresh.length ? `Trovati ${fresh.length} giochi nuovi` : 'Nessun gioco nuovo questa volta')
+    return { ok: true, count: fresh.length }
+  } catch (err) {
+    discoverError = explainError(err)
+    return { ok: false, error: discoverError }
+  } finally {
+    searching = false
+    broadcast()
+  }
+}
+
+const findSuggestion = (id: string) => store.data.discovery.suggestions.find((s) => s.id === id)
+
+function setSuggestionStatus(id: string, status: Suggestion['status']): void {
+  const s = findSuggestion(id)
+  if (!s) return
+  s.status = status
+  store.save()
+  broadcast()
+}
+
+/** Apre un gioco proposto in una scheda temporanea, con una sessione che non viene salvata. */
+function trySuggestion(id: string): void {
+  const s = findSuggestion(id)
+  if (!s) return
+  if (trial) closeTrial(false)
+  trial = { id: `${TRIAL_PREFIX}${s.id}`, name: s.name, url: s.url, category: s.category, theme: themeFromColor('#5B5BF0') }
+  const t = trial
+  void fetchIcon(t).then((data) => {
+    if (data) {
+      icons[t.id] = data
+      broadcast()
+    }
+  })
+  open(t.id)
+}
+
+function closeTrial(goBack = true): void {
+  if (!trial) return
+  const id = trial.id
+  const wasActive = active === id
+  trial = undefined
+  views.destroy(id)
+  delete icons[id]
+  removeCachedIcon(id)
+  if (wasActive && goBack) open('discover')
+  else broadcast()
+}
+
+async function addSuggestion(id: string): Promise<AddGameResult> {
+  const s = findSuggestion(id)
+  if (!s) return { ok: false, error: 'Proposta non trovata.' }
+  const fromTrial = trial?.url === s.url && active === trial.id
+  const res = await addGame(s.url)
+  if (res.ok || /già nella raccolta/.test(res.error)) {
+    s.status = 'added'
+    store.save()
+  }
+  if (res.ok) {
+    if (s.category && res.game.category === 'Altro') updateGame(res.game.id, { category: s.category })
+    if (trial?.url === s.url) closeTrial(false)
+    if (fromTrial) open(res.game.id)
+  }
+  broadcast()
+  return res
+}
+
+async function keepTrial(): Promise<AddGameResult> {
+  const s = trial && store.data.discovery.suggestions.find((x) => x.url === trial!.url)
+  if (!s) return { ok: false, error: 'Nessun gioco in prova.' }
+  return addSuggestion(s.id)
+}
+
 // ---- esporta / importa ----
 
 async function exportData(): Promise<{ ok: boolean; path?: string; error?: string }> {
@@ -453,6 +597,19 @@ function registerIpc(): void {
   ipcMain.on('test-reminder', () =>
     notify('Daily Games', remainingGames().length ? reminderText() : 'Hai già finito i giochi di oggi!', showWindow)
   )
+  ipcMain.handle('set-api-key', (_e, key: string) => saveApiKey(String(key ?? '')))
+  ipcMain.on('remove-api-key', () => {
+    removeApiKey()
+    keyHint = undefined
+    broadcast()
+  })
+  ipcMain.handle('discover', () => discover())
+  ipcMain.on('try-suggestion', (_e, id: string) => trySuggestion(id))
+  ipcMain.handle('add-suggestion', (_e, id: string) => addSuggestion(id))
+  ipcMain.on('discard-suggestion', (_e, id: string) => setSuggestionStatus(id, 'discarded'))
+  ipcMain.on('restore-suggestion', (_e, id: string) => setSuggestionStatus(id, 'new'))
+  ipcMain.handle('keep-trial', () => keepTrial())
+  ipcMain.on('close-trial', () => closeTrial())
   ipcMain.handle('export-data', () => exportData())
   ipcMain.handle('import-data', () => importData())
 }
@@ -579,6 +736,10 @@ app.whenReady().then(() => {
   createWindow()
   tray = createTray({ show: showWindow, next: () => (showWindow(), openNext()), quit: quitApp })
   loadIcons()
+  void getApiKey().then((k) => {
+    keyHint = maskKey(k)
+    broadcast()
+  })
   // Allinea l'avvio automatico con l'impostazione (es. dopo aver spostato l'exe).
   if (store.data.settings.openAtLogin) setOpenAtLogin(true)
   watchDayChange((key) => {

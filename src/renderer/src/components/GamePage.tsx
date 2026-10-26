@@ -24,6 +24,7 @@ export function GamePage({ game, state, covered, onPaste }: Props) {
   const entry = state.today[game.id]
   const done = !!entry?.played
   const notice = state.notice?.gameId === game.id ? state.notice : undefined
+  const isTrial = state.trial?.id === game.id
 
   // Comunica al processo principale dove disegnare la vista del gioco.
   useLayoutEffect(() => {
@@ -74,18 +75,33 @@ export function GamePage({ game, state, covered, onPaste }: Props) {
           <button className="tool" onClick={() => act('external')} title="Apri nel browser">
             <Icon name="external" />
           </button>
-          <button className="tool" onClick={() => onPaste(game.id)} title="Incolla il risultato a mano">
-            <Icon name="clipboard" />
-          </button>
-          <button
-            className={`played-toggle${done ? ' on' : ''}`}
-            onClick={() => window.api.setPlayed(game.id, !done)}
-          >
-            <Icon name="check" size={16} />
-            <span>{done ? 'Giocato' : 'Segna giocato'}</span>
-          </button>
+          {!isTrial && (
+            <button className="tool" onClick={() => onPaste(game.id)} title="Incolla il risultato a mano">
+              <Icon name="clipboard" />
+            </button>
+          )}
+          {!isTrial && (
+            <button
+              className={`played-toggle${done ? ' on' : ''}`}
+              onClick={() => window.api.setPlayed(game.id, !done)}
+            >
+              <Icon name="check" size={16} />
+              <span>{done ? 'Giocato' : 'Segna giocato'}</span>
+            </button>
+          )}
         </div>
       </header>
+
+      {isTrial && (
+        <div className="notice trial-bar" role="status">
+          <Icon name="sparkle" />
+          <span>Stai provando {game.name}. Gli accessi fatti in prova non vengono salvati.</span>
+          <button className="btn primary" onClick={() => void window.api.keepTrial()}>
+            <Icon name="plus" size={15} /> Aggiungi alla raccolta
+          </button>
+          <button className="btn ghost" onClick={() => window.api.closeTrial()}>Chiudi</button>
+        </div>
+      )}
 
       {notice && (
         <div className="notice" role="alert">

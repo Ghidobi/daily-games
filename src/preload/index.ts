@@ -29,7 +29,16 @@ const api: Api = {
   updateSettings: (patch) => ipcRenderer.send('update-settings', patch),
   testReminder: () => ipcRenderer.send('test-reminder'),
   exportData: () => ipcRenderer.invoke('export-data'),
-  importData: () => ipcRenderer.invoke('import-data')
+  importData: () => ipcRenderer.invoke('import-data'),
+  setApiKey: (key) => ipcRenderer.invoke('set-api-key', key),
+  removeApiKey: () => ipcRenderer.send('remove-api-key'),
+  discover: () => ipcRenderer.invoke('discover'),
+  trySuggestion: (id) => ipcRenderer.send('try-suggestion', id),
+  addSuggestion: (id) => ipcRenderer.invoke('add-suggestion', id),
+  discardSuggestion: (id) => ipcRenderer.send('discard-suggestion', id),
+  restoreSuggestion: (id) => ipcRenderer.send('restore-suggestion', id),
+  keepTrial: () => ipcRenderer.invoke('keep-trial'),
+  closeTrial: () => ipcRenderer.send('close-trial')
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -20,8 +20,12 @@ interface Hooks {
 const configuredSessions = new WeakSet<Session>()
 
 /** Sessione persistente dedicata a un gioco: cookie e localStorage restano tra un avvio e l'altro. */
+/** Id dei giochi aperti in prova: non fanno parte della raccolta. */
+export const TRIAL_PREFIX = '~trial-'
+
 export function gameSession(gameId: string): Session {
-  const ses = session.fromPartition(`persist:game-${gameId}`)
+  // I giochi in prova usano una sessione temporanea: nessun accesso resta salvato.
+  const ses = gameId.startsWith(TRIAL_PREFIX) ? session.fromPartition('trial') : session.fromPartition(`persist:game-${gameId}`)
   if (!configuredSessions.has(ses)) {
     configuredSessions.add(ses)
     ses.setUserAgent(chromeUserAgent())
