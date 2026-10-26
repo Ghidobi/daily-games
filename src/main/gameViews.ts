@@ -1,5 +1,6 @@
 import { BaseWindow, BrowserWindow, WebContentsView, dialog, session, shell } from 'electron'
 import type { Event, Input, Session, WebContents } from 'electron'
+import { join } from 'node:path'
 import type { Game, GameAction, GameViewStatus, Rect } from '@shared/types'
 import {
   chromeClientHints,
@@ -59,6 +60,7 @@ export class GameViews {
     const view = new WebContentsView({
       webPreferences: {
         session: gameSession(game.id),
+        preload: join(__dirname, '../preload/game.js'),
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false
@@ -185,6 +187,12 @@ export class GameViews {
       wc.getURL() ? wc.reload() : void wc.loadURL(game.url)
     }
     if (action === 'home') void wc.loadURL(game.url)
+  }
+
+  /** Id del gioco a cui appartiene una vista (per i messaggi che arrivano dal preload). */
+  gameIdOf(webContentsId: number): string | undefined {
+    for (const [id, v] of this.views) if (v.webContents.id === webContentsId) return id
+    return undefined
   }
 
   toggleDevTools(gameId: string): void {

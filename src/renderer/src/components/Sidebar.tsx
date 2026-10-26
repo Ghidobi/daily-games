@@ -30,6 +30,20 @@ export function Sidebar({ state }: { state: AppState }) {
         <span className="nav-label">Oggi</span>
         <span className="nav-count">{played}/{games.length}</span>
       </button>
+      <button
+        className={`nav-item${state.active === 'stats' ? ' active' : ''}`}
+        onClick={() => window.api.open('stats')}
+        title="Statistiche (Ctrl+Shift+S)"
+      >
+        <span className="nav-icon"><Icon name="chart" /></span>
+        <span className="nav-label">Statistiche</span>
+        {state.streaks.total > 0 && (
+          <span className="nav-count flame" title="Giorni di fila">
+            <Icon name="flame" size={13} />
+            {state.streaks.total}
+          </span>
+        )}
+      </button>
 
       <div className="nav-section">I tuoi giochi</div>
       <ul className="game-list">

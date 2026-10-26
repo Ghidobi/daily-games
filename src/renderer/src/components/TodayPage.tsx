@@ -1,13 +1,15 @@
 import type { AppState } from '@shared/types'
+import { summarize } from '@shared/results'
 import { formatDay, gameVars } from '../theme'
 import { GameIcon } from './GameIcon'
 import { Icon } from './Icon'
 
-export function TodayPage({ state }: { state: AppState }) {
+export function TodayPage({ state, onPaste }: { state: AppState; onPaste: (gameId?: string) => void }) {
   const games = state.games.filter((g) => !g.hidden)
   const played = games.filter((g) => state.today[g.id]?.played).length
   const allDone = games.length > 0 && played === games.length
   const pct = games.length ? (played / games.length) * 100 : 0
+  const streak = state.streaks.total
 
   return (
     <div className="page today-page">
@@ -24,18 +26,34 @@ export function TodayPage({ state }: { state: AppState }) {
       </header>
 
       <section className="progress-card" aria-label="Avanzamento di oggi">
-        <div className="progress-text">
-          <strong>{played}</strong> di {games.length} giocati
-          {allDone && <span className="cheer">Ottimo lavoro, a domani!</span>}
+        <div className="progress-top">
+          <div className="progress-text">
+            <strong>{played}</strong> di {games.length} giocati
+            {allDone && <span className="cheer">Ottimo lavoro, a domani!</span>}
+          </div>
+          <div className={`streak${streak > 0 ? ' on' : ''}`} title="Giorni consecutivi con almeno un gioco">
+            <Icon name="flame" size={16} />
+            <strong>{streak}</strong> {streak === 1 ? 'giorno' : 'giorni'} di fila
+          </div>
         </div>
         <div className="progress-bar">
           <span style={{ width: `${pct}%` }} />
+        </div>
+        <div className="progress-actions">
+          <button className="btn ghost" onClick={() => onPaste()}>
+            <Icon name="clipboard" size={16} /> Incolla risultato
+          </button>
+          <button className="btn ghost" onClick={() => void window.api.shareDay()} disabled={played === 0}>
+            <Icon name="share" size={16} /> Condividi la mia giornata
+          </button>
         </div>
       </section>
 
       <ul className="cards">
         {games.map((game, i) => {
-          const done = !!state.today[game.id]?.played
+          const entry = state.today[game.id]
+          const done = !!entry?.played
+          const gameStreak = state.streaks.games[game.id] ?? 0
           return (
             <li
               key={game.id}
@@ -52,16 +70,25 @@ export function TodayPage({ state }: { state: AppState }) {
                   <strong>{game.name}</strong>
                   <small>{game.category}</small>
                 </span>
+                {gameStreak > 0 && (
+                  <span className="card-streak" title={`${gameStreak} giorni di fila`}>
+                    <Icon name="flame" size={14} />
+                    {gameStreak}
+                  </span>
+                )}
               </button>
               <div className="card-body">
-                <span className={`pill${done ? ' ok' : ''}`}>
-                  {done ? <><Icon name="check" size={13} /> Giocato</> : 'Da giocare'}
-                </span>
+                <div className="card-status">
+                  <span className={`pill${done ? ' ok' : ''}`}>
+                    {done ? <><Icon name="check" size={13} /> Giocato</> : 'Da giocare'}
+                  </span>
+                  {entry?.result && <span className="card-result">{summarize(entry.result)}</span>}
+                </div>
                 <div className="card-actions">
                   <button
                     className="btn ghost"
                     onClick={() => window.api.setPlayed(game.id, !done)}
-                    title={done ? 'Segna come da giocare' : 'Segna come giocato'}
+                    title={done ? 'Segna come da giocare (cancella il risultato)' : 'Segna come giocato'}
                   >
                     {done ? 'Annulla' : 'Segna giocato'}
                   </button>
@@ -76,8 +103,9 @@ export function TodayPage({ state }: { state: AppState }) {
       </ul>
 
       <p className="hint">
-        Scorciatoie: <kbd>Ctrl+1</kbd>…<kbd>Ctrl+9</kbd> per i giochi, <kbd>Ctrl+0</kbd> per Oggi,{' '}
-        <kbd>Ctrl+Tab</kbd> per scorrere le schede.
+        Quando premi «Condividi» in un gioco, il risultato viene salvato da solo. Scorciatoie:{' '}
+        <kbd>Ctrl+1</kbd>…<kbd>Ctrl+9</kbd> giochi, <kbd>Ctrl+0</kbd> Oggi, <kbd>Ctrl+Shift+S</kbd> Statistiche,{' '}
+        <kbd>Ctrl+Tab</kbd> scheda successiva.
       </p>
     </div>
   )

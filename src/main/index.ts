@@ -1,12 +1,18 @@
 import { BaseWindow, Menu, WebContentsView, app, ipcMain, nativeTheme, screen, shell } from 'electron'
 import type { Event, Input } from 'electron'
 import { join } from 'node:path'
-import type { AppState, GameAction, Rect, ThemeMode } from '@shared/types'
+import type { AppState, DayEntry, GameAction, PageId, ParsePreview, Rect, ThemeMode } from '@shared/types'
+import { compactForShare, detectResult, parseFor, summarize } from '@shared/results'
+import { streaks } from '@shared/stats'
+import { ClipboardWatcher } from './capture'
 import { romeDayKey, watchDayChange } from './day'
 import { GameViews } from './gameViews'
 import { cachedIcon, fetchIcon } from './icons'
 import { Store } from './store'
 import { chromeUserAgent, isHttp } from './web'
+
+// Profilo separato per prove e sviluppo: DAILY_GAMES_PROFILE=C:\percorso\cartella
+if (process.env.DAILY_GAMES_PROFILE) app.setPath('userData', process.env.DAILY_GAMES_PROFILE)
 
 if (!app.requestSingleInstanceLock()) app.quit()
 
@@ -23,7 +29,14 @@ let active: AppState['active'] = 'today'
 let contentBounds: Rect | null = null
 let dayKey = romeDayKey()
 let notice: AppState['notice']
+let toast: AppState['toast']
+let toastSeq = 0
+let dataVersion = 0
+let watcher: ClipboardWatcher
+/** Ultimo risultato salvato, per "Annulla". */
+let lastCapture: { dayKey: string; gameId: string; previous?: DayEntry } | undefined
 const icons: Record<string, string> = {}
+const PAGES: PageId[] = ['today', 'stats']
 
 const visibleGames = () => store.data.games.filter((g) => !g.hidden)
 const findGame = (id: string) => store.data.games.find((g) => g.id === id)
@@ -37,8 +50,20 @@ function snapshot(): AppState {
     icons,
     views: views.status,
     themeMode: store.data.settings.themeMode,
-    notice
+    notice,
+    toast,
+    dataVersion,
+    streaks: streaks(store.data.days, dayKey, visibleGames().map((g) => g.id))
   }
+}
+
+function showToast(text: string, extra: Partial<AppState['toast']> = {}): void {
+  toast = { id: ++toastSeq, text, ...extra }
+}
+
+function dataChanged(): void {
+  dataVersion++
+  broadcast()
 }
 
 function broadcast(): void {
@@ -47,19 +72,61 @@ function broadcast(): void {
 
 /** Posiziona la vista del gioco attivo sopra l'area che l'interfaccia le riserva. */
 function applyLayout(): void {
-  const game = active === 'today' ? undefined : findGame(active)
+  const game = findGame(active)
   if (game) views.show(game, contentBounds)
   else views.hideAll()
 }
 
 function open(target: AppState['active']): void {
-  if (target !== 'today' && !findGame(target)) return
+  const isPage = (PAGES as string[]).includes(target)
+  if (!isPage && !findGame(target)) return
   if (target !== active) contentBounds = null // l'interfaccia invierà la nuova area
   active = target
   notice = undefined
   applyLayout()
-  if (target === 'today') shellView.webContents.focus()
+  if (isPage) shellView.webContents.focus()
   broadcast()
+}
+
+/** Un testo è arrivato dagli appunti o da un gioco: se è un risultato lo salva per oggi. */
+function capture(text: string, fromGameId?: string): void {
+  const games = visibleGames()
+  const found = detectResult(text, games, fromGameId ?? (findGame(active) ? active : undefined))
+  if (!found) return
+  const previous = store.day(dayKey)[found.gameId]
+  if (previous?.result?.text === found.result.text) return // già salvato
+  lastCapture = { dayKey, gameId: found.gameId, previous: previous && structuredClone(previous) }
+  store.setResult(dayKey, found.gameId, found.result)
+  const game = findGame(found.gameId)!
+  showToast(`${game.name}: ${summarize(found.result)}`, { gameId: game.id, undo: true })
+  dataChanged()
+}
+
+function undoCapture(): void {
+  if (!lastCapture) return
+  store.restore(lastCapture.dayKey, lastCapture.gameId, lastCapture.previous)
+  lastCapture = undefined
+  showToast('Risultato annullato')
+  dataChanged()
+}
+
+const DAY_TITLE = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long' })
+
+/** Messaggio unico con i risultati di oggi, pronto da incollare su WhatsApp. */
+function buildDayMessage(): string {
+  const today = store.day(dayKey)
+  const games = visibleGames()
+  const played = games.filter((g) => today[g.id]?.played)
+  const streak = streaks(store.data.days, dayKey, games.map((g) => g.id)).total
+  const lines = [
+    `🎮 Daily Games · ${DAY_TITLE.format(new Date(`${dayKey}T12:00:00Z`))}`,
+    `${played.length}/${games.length} giochi${streak > 1 ? ` · 🔥 ${streak} giorni di fila` : ''}`
+  ]
+  for (const g of played) {
+    const r = today[g.id].result
+    lines.push('', r ? compactForShare(r.text) : `✅ ${g.name}`)
+  }
+  return lines.join('\n')
 }
 
 function openNext(): void {
@@ -73,6 +140,11 @@ function handleInput(event: Event, input: Input): void {
   if (input.type !== 'keyDown') return
   const ctrl = input.control || input.meta
   const games = visibleGames()
+  if (ctrl && input.shift && input.key.toLowerCase() === 's') {
+    event.preventDefault()
+    open('stats')
+    return
+  }
   if (ctrl && !input.shift && !input.alt && /^[0-9]$/.test(input.key)) {
     event.preventDefault()
     const n = Number(input.key)
@@ -92,7 +164,7 @@ function handleInput(event: Event, input: Input): void {
     openNext()
     return
   }
-  const game = active === 'today' ? undefined : findGame(active)
+  const game = findGame(active)
   if (game && (input.key === 'F5' || (ctrl && input.key.toLowerCase() === 'r'))) {
     event.preventDefault()
     views.action(game, 'reload')
@@ -124,7 +196,42 @@ function registerIpc(): void {
   ipcMain.on('set-played', (_e, gameId: string, played: boolean) => {
     if (!findGame(gameId)) return
     store.setPlayed(dayKey, gameId, played)
+    dataChanged()
+  })
+  ipcMain.handle('get-days', () => store.data.days)
+  ipcMain.handle('parse-result', (_e, text: string): ParsePreview => {
+    const found = detectResult(String(text), visibleGames())
+    return found ? { gameId: found.gameId, result: found.result } : {}
+  })
+  ipcMain.on('save-result', (_e, gameId: string, text: string) => {
+    const game = findGame(gameId)
+    if (!game || !String(text).trim()) return
+    const previous = store.day(dayKey)[gameId]
+    lastCapture = { dayKey, gameId, previous: previous && structuredClone(previous) }
+    const result = parseFor(game, String(text))
+    store.setResult(dayKey, gameId, result)
+    showToast(`${game.name}: ${summarize(result)}`, { gameId, undo: true })
+    dataChanged()
+  })
+  ipcMain.on('undo-result', () => undoCapture())
+  ipcMain.on('dismiss-toast', (_e, id: number) => {
+    if (toast?.id !== id) return
+    toast = undefined
     broadcast()
+  })
+  ipcMain.handle('share-day', async () => {
+    const text = buildDayMessage()
+    await watcher.write(text)
+    showToast('Riepilogo copiato: incollalo su WhatsApp')
+    broadcast()
+    return text
+  })
+  // Testo copiato da un gioco (dal suo pulsante "Condividi").
+  ipcMain.on('game-copy', (e, text: string) => {
+    const gameId = views.gameIdOf(e.sender.id)
+    if (!gameId || typeof text !== 'string') return
+    watcher.seen(text)
+    capture(text, gameId)
   })
   ipcMain.on('game-action', (_e, gameId: string, action: GameAction) => {
     const game = findGame(gameId)
@@ -218,6 +325,8 @@ function createWindow(): void {
   wc.on('will-navigate', (e) => e.preventDefault())
   wc.once('did-finish-load', () => win.show())
 
+  watcher = new ClipboardWatcher(win, (text) => capture(text))
+
   if (process.env.ELECTRON_RENDERER_URL) void wc.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void wc.loadFile(join(__dirname, '../renderer/index.html'))
 
@@ -244,7 +353,8 @@ app.whenReady().then(() => {
   loadIcons()
   watchDayChange((key) => {
     dayKey = key
-    broadcast()
+    lastCapture = undefined
+    dataChanged()
   })
 })
 

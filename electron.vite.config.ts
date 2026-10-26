@@ -7,7 +7,15 @@ export default defineConfig({
     resolve: { alias: { '@shared': resolve('src/shared') } }
   },
   preload: {
-    resolve: { alias: { '@shared': resolve('src/shared') } }
+    resolve: { alias: { '@shared': resolve('src/shared') } },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          game: resolve('src/preload/game.ts')
+        }
+      }
+    }
   },
   renderer: {
     resolve: { alias: { '@shared': resolve('src/shared') } },

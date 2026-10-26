@@ -1,23 +1,37 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { AppState, Game } from '@shared/types'
+import { summarize } from '@shared/results'
 import { gameVars } from '../theme'
 import { GameIcon } from './GameIcon'
 import { Icon } from './Icon'
+import { Toast } from './Toast'
+
+interface Props {
+  game: Game
+  state: AppState
+  /** Una finestra dell'app è aperta sopra: la vista del gioco va nascosta. */
+  covered: boolean
+  onPaste: (gameId: string) => void
+}
 
 /**
  * Scheda di un gioco: intestazione nei colori del gioco e un riquadro vuoto sopra cui
  * il processo principale posiziona la vista web vera (WebContentsView).
  */
-export function GamePage({ game, state }: { game: Game; state: AppState }) {
+export function GamePage({ game, state, covered, onPaste }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   const status = state.views[game.id]
-  const done = !!state.today[game.id]?.played
+  const entry = state.today[game.id]
+  const done = !!entry?.played
   const notice = state.notice?.gameId === game.id ? state.notice : undefined
 
   // Comunica al processo principale dove disegnare la vista del gioco.
   useLayoutEffect(() => {
     const el = frame.current
-    if (!el) return
+    if (!el || covered) {
+      window.api.setContentBounds(null)
+      return
+    }
     const send = () => {
       const r = el.getBoundingClientRect()
       window.api.setContentBounds({ x: r.left, y: r.top, width: r.width, height: r.height })
@@ -31,7 +45,7 @@ export function GamePage({ game, state }: { game: Game; state: AppState }) {
       window.removeEventListener('resize', send)
       window.api.setContentBounds(null)
     }
-  }, [game.id])
+  }, [game.id, covered])
 
   const act = (a: Parameters<typeof window.api.gameAction>[1]) => window.api.gameAction(game.id, a)
 
@@ -42,10 +56,11 @@ export function GamePage({ game, state }: { game: Game; state: AppState }) {
           <GameIcon game={game} src={state.icons[game.id]} size={30} />
           <div>
             <strong>{game.name}</strong>
-            <small>{game.category}</small>
+            <small>{entry?.result ? summarize(entry.result) : game.category}</small>
           </div>
           {status?.loading && <span className="spinner" aria-label="Caricamento" />}
         </div>
+        {state.toast && <Toast toast={state.toast} inline />}
         <div className="game-tools">
           <button className="tool" onClick={() => act('back')} disabled={!status?.canGoBack} title="Indietro (Alt+←)">
             <Icon name="back" />
@@ -58,6 +73,9 @@ export function GamePage({ game, state }: { game: Game; state: AppState }) {
           </button>
           <button className="tool" onClick={() => act('external')} title="Apri nel browser">
             <Icon name="external" />
+          </button>
+          <button className="tool" onClick={() => onPaste(game.id)} title="Incolla il risultato a mano">
+            <Icon name="clipboard" />
           </button>
           <button
             className={`played-toggle${done ? ' on' : ''}`}

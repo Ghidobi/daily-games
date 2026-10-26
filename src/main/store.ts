@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { DayEntry, Game, ThemeMode } from '@shared/types'
+import type { DayEntry, DaysData, Game, GameResult, ThemeMode } from '@shared/types'
 import { DEFAULT_GAMES } from './catalog'
 
 export interface WindowState {
@@ -15,8 +15,7 @@ export interface WindowState {
 export interface StoreData {
   version: 1
   games: Game[]
-  /** days[YYYY-MM-DD][gameId] */
-  days: Record<string, Record<string, DayEntry>>
+  days: DaysData
   settings: {
     themeMode: ThemeMode
     window?: WindowState
@@ -83,7 +82,21 @@ export class Store {
 
   setPlayed(dayKey: string, gameId: string, played: boolean): void {
     const day = (this.data.days[dayKey] ??= {})
-    if (played) day[gameId] = { played: true, at: new Date().toISOString() }
+    if (played) day[gameId] = { ...day[gameId], played: true, at: day[gameId]?.at ?? new Date().toISOString() }
+    else delete day[gameId]
+    this.save()
+  }
+
+  setResult(dayKey: string, gameId: string, result: GameResult): void {
+    const day = (this.data.days[dayKey] ??= {})
+    day[gameId] = { played: true, at: day[gameId]?.at ?? new Date().toISOString(), result }
+    this.save()
+  }
+
+  /** Rimette una voce com'era (per "Annulla"). */
+  restore(dayKey: string, gameId: string, entry: DayEntry | undefined): void {
+    const day = (this.data.days[dayKey] ??= {})
+    if (entry) day[gameId] = entry
     else delete day[gameId]
     this.save()
   }
