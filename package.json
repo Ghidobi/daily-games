@@ -1,7 +1,7 @@
 {
   "name": "daily-games",
   "productName": "Daily Games",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Tutti i tuoi giochi giornalieri in un'unica app desktop.",
   "main": "out/main/index.js",
   "author": "Daily Games",
