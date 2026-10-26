@@ -1,6 +1,7 @@
 # Compila e pubblica una nuova versione quando si carica un tag "v*" (es. con `npm run release`).
-# 1) crea una release in bozza  2) compila Windows e Mac e vi carica i file  3) pubblica la release.
+# 1) crea una release in bozza  2) compila Windows e la pubblica  3) compila Mac e aggiunge i file.
 # Gli aggiornamenti automatici (electron-updater) vedono solo le release pubblicate.
+# Il Mac è separato perché GitHub a volte non ha Mac liberi: non deve bloccare Windows.
 name: Release
 
 on:
@@ -21,17 +22,9 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
             --title "Daily Games ${GITHUB_REF_NAME#v}" --generate-notes
 
-  build:
+  windows:
     needs: draft
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: --win
-          - os: macos-latest
-            target: --mac
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,13 +37,31 @@ jobs:
       - name: Compila e carica sulla release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder ${{ matrix.target }} --publish always
+        run: npx electron-builder --win --publish always
 
   publish:
-    needs: build
+    needs: windows
     runs-on: ubuntu-latest
     steps:
       - name: Pubblica la release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+  mac:
+    needs: draft
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx electron-vite build
+      # Carica i file Mac sulla release (in bozza o già pubblicata da poco).
+      - name: Compila e carica sulla release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --mac --publish always
