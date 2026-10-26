@@ -9,6 +9,7 @@ import { ClipboardWatcher } from './capture'
 import { buildGame, normalizeUrl, themeFromColor } from './addGame'
 import { checkKey, explainError, runDiscovery } from './discover'
 import { getApiKey, maskKey, removeApiKey, setApiKey } from './secrets'
+import { checkForUpdates, installUpdate, openReleases, setupUpdater, updateStatus } from './updater'
 import { DEFAULT_GAMES } from '@shared/catalog'
 import { romeDayKey, romeTime, watchDayChange } from './day'
 import { GameViews, TRIAL_PREFIX, gameSession } from './gameViews'
@@ -26,7 +27,12 @@ if (!app.requestSingleInstanceLock()) app.quit()
 // Anche le richieste fuori dalle viste dei giochi (es. download delle icone) usano un UA standard.
 app.userAgentFallback = chromeUserAgent()
 app.setAppUserModelId(APP_ID) // necessario per le notifiche di Windows
-Menu.setApplicationMenu(null)
+// Su Windows niente barra dei menu; su Mac serve un menu minimo per Cmd+Q e copia/incolla.
+Menu.setApplicationMenu(
+  process.platform === 'darwin'
+    ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }])
+    : null
+)
 
 let win: BaseWindow
 let shellView: WebContentsView
@@ -82,7 +88,8 @@ function snapshot(): AppState {
       lastSearchAt: store.data.discovery.lastSearchAt,
       suggestions: store.data.discovery.suggestions
     },
-    trial
+    trial,
+    update: updateStatus()
   }
 }
 
@@ -610,6 +617,12 @@ function registerIpc(): void {
   ipcMain.on('restore-suggestion', (_e, id: string) => setSuggestionStatus(id, 'new'))
   ipcMain.handle('keep-trial', () => keepTrial())
   ipcMain.on('close-trial', () => closeTrial())
+  ipcMain.on('check-updates', () => void checkForUpdates())
+  ipcMain.on('install-update', () => {
+    quitting = true // altrimenti la chiusura verso l'area di notifica bloccherebbe l'installazione
+    installUpdate()
+  })
+  ipcMain.on('open-releases', () => openReleases())
   ipcMain.handle('export-data', () => exportData())
   ipcMain.handle('import-data', () => importData())
 }
@@ -724,6 +737,11 @@ app.on('second-instance', () => {
   if (win) showWindow()
 })
 
+// Mac: clic sull'icona nel Dock con la finestra nascosta.
+app.on('activate', () => {
+  if (win) showWindow()
+})
+
 app.on('before-quit', () => {
   quitting = true
 })
@@ -749,6 +767,21 @@ app.whenReady().then(() => {
   })
   checkReminder()
   setInterval(checkReminder, 30_000)
+  let notifiedVersion: string | undefined
+  setupUpdater(() => {
+    const u = updateStatus()
+    if ((u.state === 'ready' || u.state === 'available') && u.version !== notifiedVersion) {
+      notifiedVersion = u.version
+      notify(
+        `Daily Games ${u.version} disponibile`,
+        u.state === 'ready'
+          ? 'L’aggiornamento è pronto: si installa quando chiudi l’app, oppure riavviala dall’avviso in basso a sinistra.'
+          : 'Scarica la nuova versione dalla pagina di download (pulsante in basso a sinistra).',
+        showWindow
+      )
+    }
+    broadcast()
+  })
 })
 
 app.on('window-all-closed', () => app.quit())

@@ -38,7 +38,10 @@ const api: Api = {
   discardSuggestion: (id) => ipcRenderer.send('discard-suggestion', id),
   restoreSuggestion: (id) => ipcRenderer.send('restore-suggestion', id),
   keepTrial: () => ipcRenderer.invoke('keep-trial'),
-  closeTrial: () => ipcRenderer.send('close-trial')
+  closeTrial: () => ipcRenderer.send('close-trial'),
+  checkUpdates: () => ipcRenderer.send('check-updates'),
+  installUpdate: () => ipcRenderer.send('install-update'),
+  openReleases: () => ipcRenderer.send('open-releases')
 }
 
 contextBridge.exposeInMainWorld('api', api)

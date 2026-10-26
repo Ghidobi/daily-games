@@ -1,14 +1,52 @@
 # Daily Games
 
-App desktop per Windows (e in futuro Mac) che raccoglie in un unico posto i giochi giornalieri:
+App desktop per Windows e Mac che raccoglie in un unico posto i giochi giornalieri:
 ogni gioco si apre in una scheda propria, con il sito originale, i colori del gioco e l'accesso
 che resta salvato tra un avvio e l'altro.
 
 Giochi iniziali: [Spotle Movies](https://spotle.movie/), [Farflung](https://farflung.game/),
 [Krillion](https://krillion.io/), [Spotle TV](https://www.spotle.tv/).
 
-> **Stato:** fase 4 (scoperta di nuovi giochi). Gli aggiornamenti automatici e la distribuzione
-> agli amici arriveranno nella fase 5.
+## Installare (per gli amici)
+
+Scarica l'ultima versione dalla pagina
+**[Releases](https://github.com/Ghidobi/daily-games/releases/latest)**:
+
+| Sistema | File | Aggiornamenti |
+|---|---|---|
+| Windows (consigliato) | `Daily-Games-Setup-<versione>.exe` | **automatici**: l'app scarica le nuove versioni da sola e le installa quando la chiudi |
+| Windows senza installare | `Daily-Games-<versione>-portatile.exe` | l'app ti avvisa, ma il nuovo file va scaricato a mano |
+| Mac | `Daily-Games-<versione>-mac.dmg` | l'app ti avvisa, ma il nuovo file va scaricato a mano |
+
+### L'avviso di sicurezza di Windows
+
+L'app non ha una firma digitale (costa qualche centinaio di euro l'anno), quindi Windows non la
+"conosce" e mostra degli avvisi. È normale:
+
+1. Se il **browser** segnala il download come insolito: apri il menu del download (i tre puntini
+   in Edge, la freccia in Chrome) e scegli **Mantieni** → **Mantieni comunque**.
+2. All'avvio dell'installer compare **"Windows ha protetto il PC"** (SmartScreen): clicca
+   **Ulteriori informazioni** e poi **Esegui comunque**.
+3. Scegli dove installare e premi **Installa**. L'app si apre da sola e trovi il collegamento sul
+   desktop e nel menu Start.
+
+Gli aggiornamenti successivi si installano da soli, senza rivedere questi avvisi.
+
+### Su Mac
+
+Anche su Mac l'app non è firmata con un certificato Apple. Dopo aver aperto il `.dmg` e
+trascinato Daily Games in Applicazioni, al primo avvio: **tasto destro sull'app → Apri → Apri**.
+Se macOS dice che l'app "è danneggiata", apri il Terminale ed esegui una volta:
+
+```bash
+xattr -cr "/Applications/Daily Games.app"
+```
+
+### Primi passi
+
+- Ogni gioco si apre nella sua scheda; se un gioco ha un account, accedi una volta e resta salvato.
+- Per «Scopri nuovi giochi» serve una tua chiave API di Anthropic (istruzioni nell'app).
+- I tuoi dati restano sul tuo PC; per spostarli su un altro computer usa Impostazioni → Esporta.
 
 ## Cosa fa
 
@@ -172,6 +210,7 @@ src/
     system.ts     area di notifica, notifiche, avvio con Windows
     discover.ts   ricerca di nuovi giochi con l'API di Anthropic
     secrets.ts    chiave API cifrata (safeStorage)
+    updater.ts    aggiornamenti automatici da GitHub Releases
     web.ts        user agent, domini di login, regole sui link
     store.ts      salvataggio dei dati (data.json)
     day.ts        giornata secondo il fuso Europe/Rome
@@ -204,17 +243,41 @@ Crea nella cartella `release/` due file:
 Entrambe usano gli stessi dati in `%APPDATA%\Daily Games\`, quindi accessi e statistiche restano
 anche passando da una all'altra o aggiornando.
 
-**Avviso di Windows:** l'app non ha una firma digitale (costa qualche centinaio di euro l'anno),
-quindi al primo avvio Windows mostra **"Windows ha protetto il PC"**. Per proseguire clicca
-**Ulteriori informazioni → Esegui comunque**. Se il browser segnala il download come insolito,
-scegli **Mantieni**.
+Per la versione Mac serve un Mac (`npm run dist:mac`); di solito la compila GitHub (vedi sotto).
 
-La distribuzione agli amici e gli aggiornamenti automatici tramite GitHub Releases arriveranno
-nella fase 5.
+## Pubblicare una nuova versione
+
+Le versioni si pubblicano su GitHub Releases, da dove le installazioni degli amici prendono gli
+aggiornamenti. Tutto avviene in automatico con GitHub Actions
+([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+
+```bash
+npm run release
+```
+
+Il comando aumenta la versione (es. 0.5.0 → 0.6.0; usa `npm run release:patch` per le piccole
+correzioni, 0.5.0 → 0.5.1), crea il commit e il tag e li carica su GitHub. A quel punto GitHub:
+
+1. crea una release in bozza;
+2. esegue i test e compila Windows (installer + portatile) e Mac (`.dmg` + `.zip`);
+3. carica i file e pubblica la release.
+
+Dopo una decina di minuti la nuova versione è sulla pagina Releases e le app installate degli
+amici la scaricano da sole (controllano all'avvio e ogni 6 ore) e la installano alla chiusura,
+oppure subito con «Riavvia» dall'avviso in basso a sinistra.
+
+Il repository deve restare **pubblico**: con un repository privato gli amici non potrebbero
+scaricare gli aggiornamenti.
 
 Nota: con le versioni recenti di npm gli script di installazione dei pacchetti sono bloccati
 finché non li approvi; se Electron non parte dopo `npm install`, esegui
 `node node_modules/electron/install.js` (vedi sopra).
+
+## Privacy
+
+Nel codice e nei pacchetti di installazione non ci sono dati personali, accessi o chiavi: tutto ciò
+che riguarda chi usa l'app (giochi, statistiche, accessi, chiave API) viene creato sul suo PC, nella
+sua cartella dati. La chiave API non è nel repository: ognuno inserisce la propria.
 
 ## Idee per il futuro
 

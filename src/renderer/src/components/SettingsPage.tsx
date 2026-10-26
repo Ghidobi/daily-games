@@ -24,6 +24,30 @@ const THEMES: { mode: ThemeMode; label: string }[] = [
   { mode: 'dark', label: 'Scuro' }
 ]
 
+function updateText(state: AppState): string {
+  const u = state.update
+  switch (u.state) {
+    case 'checking':
+      return 'Controllo se c’è una nuova versione…'
+    case 'latest':
+      return 'Hai l’ultima versione.'
+    case 'downloading':
+      return `Scarico la versione ${u.version}… ${u.percent}%`
+    case 'ready':
+      return `La versione ${u.version} è pronta: si installa alla chiusura dell’app o subito con il pulsante.`
+    case 'available':
+      return `È uscita la versione ${u.version}. ${state.portable ? 'La versione portatile non si aggiorna da sola: scarica il nuovo file.' : 'Scaricala dalla pagina di download.'}`
+    case 'unsupported':
+      return u.reason
+    case 'error':
+      return `Impossibile controllare gli aggiornamenti (${u.error}). Riprovo più tardi.`
+    default:
+      return state.portable
+        ? 'La versione portatile ti avvisa delle novità, ma va aggiornata scaricando il nuovo file.'
+        : 'L’app controlla da sola gli aggiornamenti e li installa alla chiusura.'
+  }
+}
+
 export function SettingsPage({ state }: { state: AppState }) {
   const s = state.settings
   const [dataMsg, setDataMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
@@ -138,6 +162,31 @@ export function SettingsPage({ state }: { state: AppState }) {
             <p>Serve per cercare nuovi giochi sul web. Le ricerche vengono addebitate sul tuo account Anthropic.</p>
           </div>
           <ApiKeyForm discovery={state.discovery} />
+        </div>
+      </section>
+
+      <section className="settings-card">
+        <h2>Aggiornamenti</h2>
+        <div className="setting">
+          <div>
+            <strong>Daily Games {state.version}</strong>
+            <p>{updateText(state)}</p>
+          </div>
+          <div className="setting-controls">
+            {state.update.state === 'ready' ? (
+              <button className="btn primary" onClick={() => window.api.installUpdate()}>Riavvia e aggiorna</button>
+            ) : state.update.state === 'available' ? (
+              <button className="btn primary" onClick={() => window.api.openReleases()}>Scarica</button>
+            ) : (
+              <button
+                className="btn ghost"
+                onClick={() => window.api.checkUpdates()}
+                disabled={state.update.state === 'unsupported' || state.update.state === 'checking' || state.update.state === 'downloading'}
+              >
+                Controlla ora
+              </button>
+            )}
+          </div>
         </div>
       </section>
 

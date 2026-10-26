@@ -115,6 +115,21 @@ export function Sidebar({ state }: { state: AppState }) {
         </li>
       </ul>
 
+      {(state.update.state === 'ready' || state.update.state === 'available') && (
+        <div className="update-card">
+          <Icon name="download" size={16} />
+          <span>
+            <strong>Versione {state.update.version}</strong>
+            {state.update.state === 'ready' ? 'pronta da installare' : 'disponibile'}
+          </span>
+          {state.update.state === 'ready' ? (
+            <button className="btn primary small" onClick={() => window.api.installUpdate()}>Riavvia</button>
+          ) : (
+            <button className="btn primary small" onClick={() => window.api.openReleases()}>Scarica</button>
+          )}
+        </div>
+      )}
+
       <div className="sidebar-foot">
         <div className="theme-switch" role="radiogroup" aria-label="Tema">
           {THEMES.map((t) => (

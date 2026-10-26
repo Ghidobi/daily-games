@@ -104,6 +104,7 @@ export interface AppState {
   /** Cresce a ogni modifica dello storico: l'interfaccia lo usa per ricaricarlo. */
   dataVersion: number
   discovery: DiscoveryState
+  update: UpdateStatus
   /** Gioco aperto in prova (non fa parte della raccolta). */
   trial?: Game
   /** Serie di giorni consecutivi (totale e per gioco). */
@@ -137,6 +138,17 @@ export interface DiscoveryState {
   lastSearchAt?: string
   suggestions: Suggestion[]
 }
+
+/** Stato degli aggiornamenti automatici. */
+export type UpdateStatus =
+  | { state: 'idle' | 'checking' }
+  | { state: 'latest'; checkedAt: string }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string }
+  /** Nuova versione da scaricare a mano (versione portatile o Mac). */
+  | { state: 'available'; version: string }
+  | { state: 'unsupported'; reason: string }
+  | { state: 'error'; error: string }
 
 /** Esito dell'analisi di un testo incollato a mano. */
 export interface ParsePreview {
@@ -193,4 +205,9 @@ export interface Api {
   /** Aggiunge alla raccolta il gioco in prova. */
   keepTrial(): Promise<AddGameResult>
   closeTrial(): void
+  checkUpdates(): void
+  /** Riavvia l'app installando l'aggiornamento scaricato. */
+  installUpdate(): void
+  /** Apre la pagina di download delle nuove versioni. */
+  openReleases(): void
 }
