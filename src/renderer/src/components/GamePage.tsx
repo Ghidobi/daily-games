@@ -25,6 +25,7 @@ export function GamePage({ game, state, covered, onPaste }: Props) {
   const done = !!entry?.played
   const notice = state.notice?.gameId === game.id ? state.notice : undefined
   const isTrial = state.trial?.id === game.id
+  const adActive = state.settings.adblock.enabled && !state.settings.adblock.disabledGames.includes(game.id)
 
   // Comunica al processo principale dove disegnare la vista del gioco.
   useLayoutEffect(() => {
@@ -63,6 +64,20 @@ export function GamePage({ game, state, covered, onPaste }: Props) {
         </div>
         {state.toast && <Toast toast={state.toast} inline />}
         <div className="game-tools">
+          {state.settings.adblock.enabled && (
+            <button
+              className={`ad-counter${adActive ? '' : ' off'}`}
+              onClick={() => window.api.setGameAdblock(game.id, !adActive, true)}
+              title={
+                adActive
+                  ? 'Pubblicità e tracker bloccati in questa pagina. Clic: metti in pausa il blocco su questo gioco e ricarica.'
+                  : 'Blocco della pubblicità in pausa su questo gioco. Clic: riattivalo e ricarica.'
+              }
+            >
+              <Icon name={adActive ? 'shield' : 'shieldOff'} size={15} />
+              <span>{adActive ? state.adblock.blocked[game.id] ?? 0 : 'In pausa'}</span>
+            </button>
+          )}
           <button className="tool" onClick={() => act('back')} disabled={!status?.canGoBack} title="Indietro (Alt+←)">
             <Icon name="back" />
           </button>
@@ -107,7 +122,13 @@ export function GamePage({ game, state, covered, onPaste }: Props) {
         <div className="notice" role="alert">
           <Icon name="alert" />
           <span>{notice.text}</span>
-          <button className="btn accent" onClick={() => act('external')}>Apri nel browser</button>
+          {notice.kind === 'adblock' ? (
+            <button className="btn accent" onClick={() => window.api.setGameAdblock(game.id, false, true)}>
+              Disattiva per questo sito
+            </button>
+          ) : (
+            <button className="btn accent" onClick={() => act('external')}>Apri nel browser</button>
+          )}
           <button className="tool plain" onClick={() => window.api.dismissNotice()} title="Chiudi">
             <Icon name="close" />
           </button>

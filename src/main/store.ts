@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname, join } from 'node:path'
 import type { DayEntry, DaysData, Game, GameResult, Suggestion, UserSettings } from '@shared/types'
 import { DEFAULT_GAMES } from '@shared/catalog'
+import { DEFAULT_ALLOWLIST } from './adblock'
 
 export interface WindowState {
   x?: number
@@ -33,7 +34,8 @@ function defaults(): StoreData {
       themeMode: 'system',
       reminder: { enabled: false, time: '21:00' },
       closeToTray: true,
-      openAtLogin: false
+      openAtLogin: false,
+      adblock: { enabled: true, disabledGames: [], allowlist: [...DEFAULT_ALLOWLIST] }
     }
   }
 }
@@ -52,7 +54,8 @@ function normalize(parsed: Partial<StoreData>): StoreData {
     settings: {
       ...base.settings,
       ...parsed.settings,
-      reminder: { ...base.settings.reminder, ...parsed.settings?.reminder }
+      reminder: { ...base.settings.reminder, ...parsed.settings?.reminder },
+      adblock: { ...base.settings.adblock, ...parsed.settings?.adblock }
     }
   }
 }

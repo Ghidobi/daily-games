@@ -34,6 +34,24 @@ contextBridge.executeInMainWorld({
   args: [CHANNEL]
 })
 
+// Alcuni siti si accorgono del blocco della pubblicità e chiedono di disattivarlo:
+// cerchiamo quei messaggi nel testo della pagina e avvisiamo l'app.
+const ADBLOCK_WORDS = /ad.?block|blocco (della )?pubblicit|bloccatore di annunci/i
+const ADBLOCK_ASK = /(disabl|turn off|whitelist|allowlist|detected|pause|disattiv|rilevat|sospend)/i
+function checkAdblockNotice(): void {
+  const text = document.body?.innerText?.slice(0, 20000) ?? ''
+  for (const line of text.split('\n')) {
+    if (ADBLOCK_WORDS.test(line) && ADBLOCK_ASK.test(line)) {
+      ipcRenderer.send('adblock-detected', line.slice(0, 200))
+      return
+    }
+  }
+}
+// Da DOMContentLoaded: l'evento 'load' può tardare molto sulle pagine con tante risorse.
+window.addEventListener('DOMContentLoaded', () => {
+  for (const ms of [2500, 8000, 20000]) setTimeout(checkAdblockNotice, ms)
+})
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return
   const text = (event.data as Record<string, unknown> | null)?.[CHANNEL]

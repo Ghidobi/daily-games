@@ -1904,6 +1904,93 @@ code {
   font-size: 13px;
 }
 
+/* ---------- Blocco pubblicità ---------- */
+
+.ad-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  margin-right: 6px;
+  padding: 0 10px;
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: rgb(127 127 127 / 0.18);
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.ad-counter:hover {
+  background: rgb(127 127 127 / 0.3);
+}
+
+.ad-counter.off {
+  opacity: 0.75;
+  font-weight: 600;
+}
+
+.ad-games {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 16px;
+}
+
+.ad-games li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.ad-games li > span:not(.game-icon) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.domain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 99px;
+  font: 12.5px ui-monospace, Consolas, monospace;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.domain-chip button {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted);
+}
+
+.domain-chip button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.setting.off-all {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* ---------- Schermi piccoli ---------- */
 
 @media (max-width: 880px) {
@@ -2034,4 +2121,8 @@ code {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.warn-text {
+  color: #b45309 !important;
 }

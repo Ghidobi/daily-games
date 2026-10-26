@@ -15,14 +15,25 @@ interface Hooks {
   onStatus(): void
   onGoogleBlocked(gameId: string): void
   onInput(event: Event, input: Input): void
+  /** Nuova pagina caricata nella scheda (azzera il contatore del blocco pubblicità). */
+  onNavigate(gameId: string): void
 }
 
 const configuredSessions = new WeakSet<Session>()
 
-/** Sessione persistente dedicata a un gioco: cookie e localStorage restano tra un avvio e l'altro. */
 /** Id dei giochi aperti in prova: non fanno parte della raccolta. */
 export const TRIAL_PREFIX = '~trial-'
+/** Chiave unica con cui la sessione temporanea dei giochi in prova si presenta agli altri moduli. */
+export const TRIAL_SESSION_KEY = '~trial'
 
+let onSessionCreated: ((ses: Session, gameId: string) => void) | undefined
+
+/** Registra chi deve configurare ogni nuova sessione di gioco (es. il blocco pubblicità). */
+export function setSessionHook(fn: (ses: Session, gameId: string) => void): void {
+  onSessionCreated = fn
+}
+
+/** Sessione persistente dedicata a un gioco: cookie e localStorage restano tra un avvio e l'altro. */
 export function gameSession(gameId: string): Session {
   // I giochi in prova usano una sessione temporanea: nessun accesso resta salvato.
   const ses = gameId.startsWith(TRIAL_PREFIX) ? session.fromPartition('trial') : session.fromPartition(`persist:game-${gameId}`)
@@ -41,6 +52,7 @@ export function gameSession(gameId: string): Session {
     ses.setPermissionRequestHandler((_wc, permission, cb) =>
       cb(permission === 'clipboard-sanitized-write' || permission === 'fullscreen')
     )
+    onSessionCreated?.(ses, gameId.startsWith(TRIAL_PREFIX) ? TRIAL_SESSION_KEY : gameId)
   }
   return ses
 }
@@ -97,6 +109,7 @@ export class GameViews {
     })
     wc.on('did-navigate', (_e, url) => {
       update({})
+      this.hooks.onNavigate(game.id)
       if (isGoogleRejection(url)) this.hooks.onGoogleBlocked(game.id)
     })
     wc.on('did-navigate-in-page', () => update({}))

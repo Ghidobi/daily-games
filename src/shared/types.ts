@@ -30,6 +30,26 @@ export interface UserSettings {
   closeToTray: boolean
   /** Avvio automatico con Windows (ridotta nell'area di notifica). */
   openAtLogin: boolean
+  adblock: AdblockSettings
+}
+
+export interface AdblockSettings {
+  /** Interruttore generale. */
+  enabled: boolean
+  /** Giochi su cui il blocco è spento. */
+  disabledGames: string[]
+  /** Domini mai bloccati (né le richieste verso di loro, né le loro pagine). */
+  allowlist: string[]
+}
+
+export interface AdblockState {
+  ready: boolean
+  updating: boolean
+  updatedAt?: string
+  filters?: number
+  error?: string
+  /** Elementi bloccati nella pagina attuale di ogni gioco. */
+  blocked: Record<string, number>
 }
 
 /** Modifiche consentite a un gioco della raccolta. */
@@ -98,8 +118,9 @@ export interface AppState {
   packaged: boolean
   /** true nella versione portatile (le notifiche di Windows potrebbero non comparire). */
   portable: boolean
-  /** Messaggio da mostrare (es. accesso Google bloccato). */
-  notice?: { gameId: string; text: string }
+  /** Messaggio da mostrare (es. accesso Google bloccato, gioco che rileva il blocco pubblicità). */
+  notice?: { gameId: string; text: string; kind: 'google' | 'adblock' }
+  adblock: AdblockState
   toast?: Toast
   /** Cresce a ogni modifica dello storico: l'interfaccia lo usa per ricaricarlo. */
   dataVersion: number
@@ -210,4 +231,8 @@ export interface Api {
   installUpdate(): void
   /** Apre la pagina di download delle nuove versioni. */
   openReleases(): void
+  setAdblock(patch: Partial<Pick<AdblockSettings, 'enabled' | 'allowlist'>>): void
+  /** Attiva/disattiva il blocco su un gioco; con `reload` ricarica la pagina. */
+  setGameAdblock(gameId: string, active: boolean, reload?: boolean): void
+  refreshFilters(): void
 }

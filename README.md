@@ -83,6 +83,42 @@ xattr -cr "/Applications/Daily Games.app"
     passare a un altro PC (incluso lo storico delle scoperte). Gli accessi ai giochi non sono inclusi. Prima di ogni importazione
     l'app salva una copia dei dati attuali in `%APPDATA%\Daily Games\backup\`.
 
+### Blocco della pubblicità
+
+Le schede dei giochi bloccano pubblicità e tracker con
+[@ghostery/adblocker-electron](https://github.com/ghostery/adblocker) (il vecchio nome era
+`@cliqz/adblocker-electron`).
+
+- **Filtri:** EasyList, EasyPrivacy, i filtri di uBlock Origin (inclusi quelli che correggono i
+  siti rotti) e la lista di Peter Lowe, nelle copie mantenute dal progetto Ghostery. Si scaricano
+  al primo avvio, restano in cache in `%APPDATA%\Daily Games\adblock\` e si aggiornano da sole
+  una volta al giorno; senza internet l'app usa l'ultima copia salvata.
+- **Cosa fa:** blocca le richieste di pubblicità e tracker e nasconde gli spazi vuoti lasciati
+  dagli annunci (filtri cosmetici). Vale anche per i giochi aggiunti da URL, da «Scopri» o aperti
+  in prova.
+- **Login al sicuro:** non vengono mai filtrati i domini della lista «Domini da non bloccare mai»
+  (di base: accesso Google, Apple, Microsoft, Firebase, Discord, GitHub; modificabile nelle
+  Impostazioni), né le pagine aperte su quei domini (es. il popup di accesso di Google), né gli
+  indirizzi di login sul sito del gioco stesso (`/login`, `/auth`, `/oauth`, `/session`, …).
+- **Contatore:** nell'intestazione di ogni scheda lo scudo indica quante richieste sono state
+  bloccate nella pagina attuale. Un clic mette in pausa il blocco su quel gioco e ricarica la
+  pagina; un altro clic lo riattiva.
+- **Se un gioco se ne accorge:** quando la pagina mostra un messaggio tipo «disattiva l'adblock»,
+  compare un avviso con il pulsante **Disattiva per questo sito**. Il riconoscimento si basa sul
+  testo della pagina, quindi non intercetta proprio tutti i casi: se un gioco non funziona, metti
+  in pausa il blocco con lo scudo.
+- **Impostazioni → Blocco pubblicità:** interruttore generale, interruttore per ogni gioco,
+  elenco dei domini da non bloccare mai, aggiornamento manuale delle liste.
+
+Prova fatta sui 4 giochi (ottobre 2026), con il blocco attivo e disattivo:
+
+| Gioco | Con il blocco | Accesso |
+|---|---|---|
+| Spotle Movies | bloccati la pubblicità (`cdn.intergient.com`) e il suo banner di consenso; il gioco funziona | la pagina di accesso si apre, nessuna richiesta bloccata |
+| Farflung | niente da bloccare (il sito non ha pubblicità) | il pulsante «Accedi con Google» si carica, nessuna richiesta bloccata |
+| Krillion | bloccata la pubblicità (`scripts.mediavine.com`); il gioco funziona | il gioco non ha un account |
+| Spotle TV | bloccata la pubblicità (`pagead2.googlesyndication.com`); il gioco funziona | il gioco non ha un account |
+
 ### Scopri nuovi giochi
 
 La pagina **Scopri** usa Claude (modello `claude-opus-5-5`) con lo strumento di ricerca web
@@ -195,6 +231,7 @@ pacchetto di installazione**:
   - `icons\`: icone dei giochi scaricate dai siti
   - `backup\`: copie automatiche fatte prima di importare un backup
   - `secrets.json`: la chiave API di Anthropic, cifrata (se l'hai inserita)
+  - `adblock\`: liste dei filtri e motore del blocco pubblicità in cache
 
 Per ricominciare da zero basta chiudere l'app e cancellare quella cartella.
 
@@ -211,6 +248,7 @@ src/
     discover.ts   ricerca di nuovi giochi con l'API di Anthropic
     secrets.ts    chiave API cifrata (safeStorage)
     updater.ts    aggiornamenti automatici da GitHub Releases
+    adblock.ts    blocco della pubblicità (filtri, eccezioni, contatore)
     web.ts        user agent, domini di login, regole sui link
     store.ts      salvataggio dei dati (data.json)
     day.ts        giornata secondo il fuso Europe/Rome

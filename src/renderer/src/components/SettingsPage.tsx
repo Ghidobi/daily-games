@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AppState, ThemeMode } from '@shared/types'
 import { ApiKeyForm } from './ApiKeyForm'
+import { AdblockSettings } from './AdblockSettings'
 import { Icon } from './Icon'
 
 function Switch({ checked, onChange, disabled, label }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string }) {
@@ -153,6 +154,8 @@ export function SettingsPage({ state }: { state: AppState }) {
           />
         </div>
       </section>
+
+      <AdblockSettings state={state} />
 
       <section className="settings-card">
         <h2>Scopri nuovi giochi</h2>

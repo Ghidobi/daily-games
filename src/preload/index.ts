@@ -41,7 +41,10 @@ const api: Api = {
   closeTrial: () => ipcRenderer.send('close-trial'),
   checkUpdates: () => ipcRenderer.send('check-updates'),
   installUpdate: () => ipcRenderer.send('install-update'),
-  openReleases: () => ipcRenderer.send('open-releases')
+  openReleases: () => ipcRenderer.send('open-releases'),
+  setAdblock: (patch) => ipcRenderer.send('set-adblock', patch),
+  setGameAdblock: (gameId, active, reload) => ipcRenderer.send('set-game-adblock', gameId, active, reload),
+  refreshFilters: () => ipcRenderer.send('refresh-filters')
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -12,7 +12,8 @@ import { getApiKey, maskKey, removeApiKey, setApiKey } from './secrets'
 import { checkForUpdates, installUpdate, openReleases, setupUpdater, updateStatus } from './updater'
 import { DEFAULT_GAMES } from '@shared/catalog'
 import { romeDayKey, romeTime, watchDayChange } from './day'
-import { GameViews, TRIAL_PREFIX, gameSession } from './gameViews'
+import { Adblock } from './adblock'
+import { GameViews, TRIAL_PREFIX, TRIAL_SESSION_KEY, gameSession, setSessionHook } from './gameViews'
 import { cachedIcon, fetchIcon, removeCachedIcon } from './icons'
 import { Store, validateExport } from './store'
 import type { ExportFile } from './store'
@@ -55,6 +56,10 @@ let lastCapture: { dayKey: string; gameId: string; previous?: DayEntry } | undef
 const icons: Record<string, string> = {}
 const PAGES: PageId[] = ['today', 'stats', 'collection', 'settings', 'discover']
 let trial: Game | undefined
+let adblock: Adblock
+/** Elementi bloccati nella pagina attuale di ogni gioco. */
+const blocked: Record<string, number> = {}
+let blockedTimer: NodeJS.Timeout | undefined
 let keyHint: string | undefined
 let searching = false
 let discoverError: string | undefined
@@ -89,7 +94,8 @@ function snapshot(): AppState {
       suggestions: store.data.discovery.suggestions
     },
     trial,
-    update: updateStatus()
+    update: updateStatus(),
+    adblock: { ...adblock.status, blocked }
   }
 }
 
@@ -302,6 +308,53 @@ async function addGame(input: string): Promise<AddGameResult> {
   showToast(`${game.name} aggiunto alla raccolta`)
   dataChanged()
   return { ok: true, game, warning }
+}
+
+// ---- blocco pubblicità ----
+
+/** I giochi in prova condividono una sessione: il loro id per il blocco è quello della prova aperta. */
+const adblockId = (gameId: string) => (gameId === TRIAL_SESSION_KEY && trial ? trial.id : gameId)
+
+function adblockActive(gameId: string): boolean {
+  const a = store.data.settings.adblock
+  return a.enabled && !a.disabledGames.includes(adblockId(gameId))
+}
+
+/** Il contatore si aggiorna al massimo due volte al secondo. */
+function countBlocked(gameId: string): void {
+  const id = adblockId(gameId)
+  blocked[id] = (blocked[id] ?? 0) + 1
+  blockedTimer ??= setTimeout(() => {
+    blockedTimer = undefined
+    broadcast()
+  }, 500)
+}
+
+function setGameAdblock(gameId: string, active: boolean, reload: boolean): void {
+  const a = store.data.settings.adblock
+  a.disabledGames = active ? a.disabledGames.filter((id) => id !== gameId) : [...new Set([...a.disabledGames, gameId])]
+  store.save()
+  if (notice?.gameId === gameId && notice.kind === 'adblock') notice = undefined
+  const game = findGame(gameId)
+  if (reload && game) views.action(game, 'reload')
+  broadcast()
+}
+
+function setAdblock(patch: { enabled?: boolean; allowlist?: string[] }): void {
+  const a = store.data.settings.adblock
+  if (patch.enabled !== undefined) a.enabled = !!patch.enabled
+  if (Array.isArray(patch.allowlist)) {
+    // Solo nomi di dominio: "https://www.esempio.it/pagina" diventa "www.esempio.it".
+    a.allowlist = [
+      ...new Set(
+        patch.allowlist
+          .map((d) => String(d).trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/:].*$/, '').replace(/^\*\./, ''))
+          .filter((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d))
+      )
+    ]
+  }
+  store.save()
+  broadcast()
 }
 
 // ---- scopri nuovi giochi ----
@@ -623,6 +676,22 @@ function registerIpc(): void {
     installUpdate()
   })
   ipcMain.on('open-releases', () => openReleases())
+  ipcMain.on('set-adblock', (_e, patch: { enabled?: boolean; allowlist?: string[] }) => setAdblock(patch ?? {}))
+  ipcMain.on('set-game-adblock', (_e, gameId: string, active: boolean, reload?: boolean) =>
+    findGame(gameId) && setGameAdblock(gameId, !!active, !!reload)
+  )
+  ipcMain.on('refresh-filters', () => void adblock.refresh())
+  // Un gioco ha scritto in pagina di disattivare il blocco della pubblicità.
+  ipcMain.on('adblock-detected', (e) => {
+    const gameId = views.gameIdOf(e.sender.id)
+    if (!gameId || !adblockActive(gameId) || notice?.gameId === gameId) return
+    notice = {
+      gameId,
+      kind: 'adblock',
+      text: 'Questo gioco sembra accorgersi del blocco della pubblicità e potrebbe non funzionare.'
+    }
+    broadcast()
+  })
   ipcMain.handle('export-data', () => exportData())
   ipcMain.handle('import-data', () => importData())
 }
@@ -683,11 +752,18 @@ function createWindow(): void {
     onGoogleBlocked: (gameId) => {
       notice = {
         gameId,
-        text: 'Google ha bloccato l’accesso da questa app. Puoi aprire il gioco nel tuo browser.'
+        text: 'Google ha bloccato l’accesso da questa app. Puoi aprire il gioco nel tuo browser.',
+        kind: 'google'
       }
       broadcast()
     },
-    onInput: handleInput
+    onInput: handleInput,
+    onNavigate: (gameId) => {
+      if (blocked[gameId]) {
+        blocked[gameId] = 0
+        broadcast()
+      }
+    }
   })
 
   const fitShell = () => {
@@ -748,6 +824,16 @@ app.on('before-quit', () => {
 
 app.whenReady().then(() => {
   store = new Store()
+  adblock = new Adblock({
+    isActive: adblockActive,
+    allowlist: () => store.data.settings.adblock.allowlist,
+    gameUrl: (gameId) => findGame(adblockId(gameId))?.url,
+    onBlocked: countBlocked,
+    onStatus: () => broadcast()
+  })
+  // Ogni sessione di gioco, anche dei giochi aggiunti dopo o in prova, riceve il blocco.
+  setSessionHook((ses, gameId) => adblock.attach(ses, gameId))
+  adblock.init()
   nativeTheme.themeSource = store.data.settings.themeMode
   nativeTheme.on('updated', () => broadcast())
   registerIpc()
