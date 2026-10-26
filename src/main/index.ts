@@ -1,14 +1,19 @@
-import { BaseWindow, Menu, WebContentsView, app, ipcMain, nativeTheme, screen, shell } from 'electron'
-import type { Event, Input } from 'electron'
+import { BaseWindow, Menu, WebContentsView, app, dialog, ipcMain, nativeTheme, screen, shell } from 'electron'
+import type { Event, Input, Tray } from 'electron'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AppState, DayEntry, GameAction, PageId, ParsePreview, Rect, ThemeMode } from '@shared/types'
+import type { AddGameResult, AppState, DayEntry, GameAction, GamePatch, PageId, ParsePreview, Rect, ThemeMode, UserSettings } from '@shared/types'
 import { compactForShare, detectResult, parseFor, summarize } from '@shared/results'
 import { streaks } from '@shared/stats'
 import { ClipboardWatcher } from './capture'
-import { romeDayKey, watchDayChange } from './day'
-import { GameViews } from './gameViews'
-import { cachedIcon, fetchIcon } from './icons'
-import { Store } from './store'
+import { buildGame, normalizeUrl } from './addGame'
+import { DEFAULT_GAMES } from '@shared/catalog'
+import { romeDayKey, romeTime, watchDayChange } from './day'
+import { GameViews, gameSession } from './gameViews'
+import { cachedIcon, fetchIcon, removeCachedIcon } from './icons'
+import { Store, validateExport } from './store'
+import type { ExportFile } from './store'
+import { APP_ID, appIcon, createTray, isPortable, notify, setOpenAtLogin, startedHidden } from './system'
 import { chromeUserAgent, isHttp } from './web'
 
 // Profilo separato per prove e sviluppo: DAILY_GAMES_PROFILE=C:\percorso\cartella
@@ -18,12 +23,16 @@ if (!app.requestSingleInstanceLock()) app.quit()
 
 // Anche le richieste fuori dalle viste dei giochi (es. download delle icone) usano un UA standard.
 app.userAgentFallback = chromeUserAgent()
+app.setAppUserModelId(APP_ID) // necessario per le notifiche di Windows
 Menu.setApplicationMenu(null)
 
 let win: BaseWindow
 let shellView: WebContentsView
 let views: GameViews
 let store: Store
+let tray: Tray | undefined
+let quitting = false
+let trayHintShown = false
 
 let active: AppState['active'] = 'today'
 let contentBounds: Rect | null = null
@@ -36,7 +45,7 @@ let watcher: ClipboardWatcher
 /** Ultimo risultato salvato, per "Annulla". */
 let lastCapture: { dayKey: string; gameId: string; previous?: DayEntry } | undefined
 const icons: Record<string, string> = {}
-const PAGES: PageId[] = ['today', 'stats']
+const PAGES: PageId[] = ['today', 'stats', 'collection', 'settings']
 
 const visibleGames = () => store.data.games.filter((g) => !g.hidden)
 const findGame = (id: string) => store.data.games.find((g) => g.id === id)
@@ -50,6 +59,10 @@ function snapshot(): AppState {
     icons,
     views: views.status,
     themeMode: store.data.settings.themeMode,
+    settings: (({ window: _w, ...rest }) => rest)(store.data.settings),
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    portable: isPortable,
     notice,
     toast,
     dataVersion,
@@ -133,6 +146,196 @@ function openNext(): void {
   const today = store.day(dayKey)
   const next = visibleGames().find((g) => !today[g.id]?.played)
   open(next ? next.id : 'today')
+}
+
+function showWindow(): void {
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
+
+function quitApp(): void {
+  quitting = true
+  app.quit()
+}
+
+// ---- promemoria ----
+
+const remainingGames = () => visibleGames().filter((g) => !store.day(dayKey)[g.id]?.played)
+
+function reminderText(): string {
+  const left = remainingGames()
+  const names = left.map((g) => g.name)
+  const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} e altri ${names.length - 3}` : names.join(', ')
+  return left.length === 1 ? `Ti manca ancora ${list}.` : `Ti mancano ancora ${left.length} giochi: ${list}.`
+}
+
+/** Notifica all'ora scelta, una volta al giorno, solo se restano giochi da fare. */
+function checkReminder(): void {
+  const r = store.data.settings.reminder
+  if (!r.enabled || store.data.reminderSentOn === dayKey || romeTime() < r.time) return
+  store.data.reminderSentOn = dayKey
+  store.save()
+  if (remainingGames().length === 0) return
+  notify('Daily Games', reminderText(), () => {
+    showWindow()
+    openNext()
+  })
+}
+
+function updateSettings(patch: Partial<UserSettings>): void {
+  const s = store.data.settings
+  if (patch.reminder) {
+    const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(patch.reminder.time) ? patch.reminder.time : s.reminder.time
+    s.reminder = { enabled: !!patch.reminder.enabled, time }
+    // Se l'ora di oggi è già passata, il primo promemoria arriva domani.
+    store.data.reminderSentOn = romeTime() >= time ? dayKey : undefined
+  }
+  if (patch.closeToTray !== undefined) s.closeToTray = !!patch.closeToTray
+  if (patch.openAtLogin !== undefined) {
+    s.openAtLogin = !!patch.openAtLogin
+    setOpenAtLogin(s.openAtLogin)
+  }
+  store.save()
+  broadcast()
+}
+
+// ---- raccolta ----
+
+function updateGame(id: string, patch: GamePatch): void {
+  const game = findGame(id)
+  if (!game) return
+  if (typeof patch.name === 'string' && patch.name.trim()) game.name = patch.name.trim().slice(0, 40)
+  if (typeof patch.category === 'string') game.category = patch.category.trim().slice(0, 30)
+  if (patch.hidden !== undefined) game.hidden = !!patch.hidden
+  if (typeof patch.accent === 'string' && /^#[0-9a-f]{6}$/i.test(patch.accent)) {
+    // L'intestazione resta quella del sito: cambia solo l'accento (bordo e pulsanti).
+    game.theme = { ...game.theme, accent: patch.accent.toUpperCase() }
+  }
+  store.save()
+  if (game.hidden && active === id) open('today')
+  dataChanged()
+}
+
+function reorderGames(ids: string[]): void {
+  const current = store.data.games
+  if (ids.length !== current.length || !current.every((g) => ids.includes(g.id))) return
+  store.data.games = ids.map((id) => current.find((g) => g.id === id)!)
+  store.save()
+  dataChanged()
+}
+
+async function removeGame(id: string, clearLogin: boolean): Promise<void> {
+  const game = findGame(id)
+  if (!game) return
+  if (active === id) open('today')
+  views.destroy(id)
+  store.data.games = store.data.games.filter((g) => g.id !== id)
+  delete icons[id]
+  removeCachedIcon(id)
+  if (clearLogin) {
+    const ses = gameSession(id)
+    await ses.clearStorageData()
+    await ses.clearCache()
+  }
+  store.save() // lo storico resta: se riaggiungi il gioco ritrovi le statistiche
+  showToast(`${game.name} eliminato dalla raccolta`)
+  dataChanged()
+}
+
+/** Stesso sito e stessa pagina (ignorando www e la barra finale). */
+function samePage(a: string, b: URL): boolean {
+  const u = new URL(a)
+  const host = (h: string) => h.replace(/^www\./, '')
+  const path = (p: string) => p.replace(/\/$/, '')
+  return host(u.hostname) === host(b.hostname) && path(u.pathname) === path(b.pathname)
+}
+
+async function addGame(input: string): Promise<AddGameResult> {
+  const url = normalizeUrl(String(input))
+  if (!url) return { ok: false, error: 'Indirizzo non valido. Esempio: https://www.nytimes.com/games/wordle' }
+  const dup = store.data.games.find((g) => samePage(g.url, url))
+  if (dup) return { ok: false, error: `${dup.name} è già nella raccolta.` }
+  let warning: string | undefined
+  // Uno dei giochi iniziali eliminato e poi riaggiunto torna con il suo tema curato.
+  const known = DEFAULT_GAMES.find((g) => samePage(g.url, url))
+  let game = known && structuredClone(known)
+  if (game) {
+    const g = game
+    void fetchIcon(g).then((data) => {
+      if (data) {
+        icons[g.id] = data
+        broadcast()
+      }
+    })
+  } else {
+    const built = await buildGame(url, store.data.games)
+    game = built.game
+    warning = built.warning
+    if (built.icon) icons[game.id] = built.icon
+  }
+  store.data.games.push(game)
+  store.save()
+  showToast(`${game.name} aggiunto alla raccolta`)
+  dataChanged()
+  return { ok: true, game, warning }
+}
+
+// ---- esporta / importa ----
+
+async function exportData(): Promise<{ ok: boolean; path?: string; error?: string }> {
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Esporta i dati di Daily Games',
+    defaultPath: join(app.getPath('documents'), `daily-games-backup-${dayKey}.json`),
+    filters: [{ name: 'Backup Daily Games', extensions: ['json'] }]
+  })
+  if (res.canceled || !res.filePath) return { ok: false }
+  try {
+    writeFileSync(res.filePath, JSON.stringify(store.toExport(), null, 2), 'utf8')
+    showToast('Dati esportati')
+    broadcast()
+    return { ok: true, path: res.filePath }
+  } catch (err) {
+    return { ok: false, error: `Impossibile salvare il file: ${(err as Error).message}` }
+  }
+}
+
+async function importData(): Promise<{ ok: boolean; error?: string; canceled?: boolean }> {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Importa un backup di Daily Games',
+    defaultPath: app.getPath('documents'),
+    filters: [{ name: 'Backup Daily Games', extensions: ['json'] }],
+    properties: ['openFile']
+  })
+  if (res.canceled || !res.filePaths[0]) return { ok: false, canceled: true }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(res.filePaths[0], 'utf8'))
+  } catch {
+    return { ok: false, error: 'Il file non è leggibile (non è un JSON valido).' }
+  }
+  const problem = validateExport(parsed)
+  if (problem) return { ok: false, error: problem }
+  const file = parsed as ExportFile
+  const confirm = await dialog.showMessageBox(win, {
+    type: 'question',
+    title: 'Importa backup',
+    message: 'Sostituire raccolta, statistiche e impostazioni con quelle del backup?',
+    detail: `Il backup contiene ${file.games.length} giochi e ${Object.keys(file.days).length} giorni di storico. I dati attuali vengono prima salvati in una copia di sicurezza. Gli accessi ai giochi non fanno parte del backup.`,
+    buttons: ['Importa', 'Annulla'],
+    defaultId: 0,
+    cancelId: 1
+  })
+  if (confirm.response !== 0) return { ok: false, canceled: true }
+  const before = store.data.games.map((g) => g.id)
+  store.importFrom(file)
+  for (const id of before) if (!findGame(id)) views.destroy(id)
+  nativeTheme.themeSource = store.data.settings.themeMode
+  open('today')
+  loadIcons()
+  showToast('Backup importato')
+  dataChanged()
+  return { ok: true }
 }
 
 /** Scorciatoie valide ovunque, anche quando il focus è dentro un gioco. */
@@ -242,6 +445,16 @@ function registerIpc(): void {
     notice = undefined
     broadcast()
   })
+  ipcMain.handle('add-game', (_e, url: string) => addGame(url))
+  ipcMain.on('update-game', (_e, id: string, patch: GamePatch) => updateGame(id, patch ?? {}))
+  ipcMain.on('reorder-games', (_e, ids: string[]) => Array.isArray(ids) && reorderGames(ids))
+  ipcMain.on('remove-game', (_e, id: string, clearLogin: boolean) => void removeGame(id, !!clearLogin))
+  ipcMain.on('update-settings', (_e, patch: Partial<UserSettings>) => updateSettings(patch ?? {}))
+  ipcMain.on('test-reminder', () =>
+    notify('Daily Games', remainingGames().length ? reminderText() : 'Hai già finito i giochi di oggi!', showWindow)
+  )
+  ipcMain.handle('export-data', () => exportData())
+  ipcMain.handle('import-data', () => importData())
 }
 
 function loadIcons(): void {
@@ -276,6 +489,7 @@ function createWindow(): void {
     minWidth: 640,
     minHeight: 480,
     title: 'Daily Games',
+    icon: appIcon(),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0E1116' : '#F6F7F9',
     show: false
   })
@@ -323,25 +537,38 @@ function createWindow(): void {
     return { action: 'deny' }
   })
   wc.on('will-navigate', (e) => e.preventDefault())
-  wc.once('did-finish-load', () => win.show())
+  wc.once('did-finish-load', () => {
+    if (!startedHidden) win.show()
+  })
 
   watcher = new ClipboardWatcher(win, (text) => capture(text))
 
   if (process.env.ELECTRON_RENDERER_URL) void wc.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void wc.loadFile(join(__dirname, '../renderer/index.html'))
 
-  win.on('close', () => {
+  win.on('close', (e) => {
     const b = win.getNormalBounds()
     store.data.settings.window = { ...b, maximized: win.isMaximized() }
     store.flush()
+    // Con l'opzione attiva la finestra si nasconde: il promemoria continua a funzionare.
+    if (!quitting && store.data.settings.closeToTray) {
+      e.preventDefault()
+      win.hide()
+      if (!trayHintShown) {
+        trayHintShown = true
+        notify('Daily Games è ancora attivo', 'Lo trovi nell’area di notifica, vicino all’orologio. Per chiuderlo davvero: tasto destro → Esci.')
+      }
+    }
   })
-  win.on('closed', () => app.quit())
+  win.on('closed', () => quitApp())
 }
 
 app.on('second-instance', () => {
-  if (!win) return
-  if (win.isMinimized()) win.restore()
-  win.focus()
+  if (win) showWindow()
+})
+
+app.on('before-quit', () => {
+  quitting = true
 })
 
 app.whenReady().then(() => {
@@ -350,12 +577,17 @@ app.whenReady().then(() => {
   nativeTheme.on('updated', () => broadcast())
   registerIpc()
   createWindow()
+  tray = createTray({ show: showWindow, next: () => (showWindow(), openNext()), quit: quitApp })
   loadIcons()
+  // Allinea l'avvio automatico con l'impostazione (es. dopo aver spostato l'exe).
+  if (store.data.settings.openAtLogin) setOpenAtLogin(true)
   watchDayChange((key) => {
     dayKey = key
     lastCapture = undefined
     dataChanged()
   })
+  checkReminder()
+  setInterval(checkReminder, 30_000)
 })
 
 app.on('window-all-closed', () => app.quit())

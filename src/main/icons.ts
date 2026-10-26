@@ -1,5 +1,5 @@
 import { app, net } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Game } from '@shared/types'
 
@@ -56,18 +56,28 @@ async function download(url: string): Promise<string | undefined> {
   return `data:${type};base64,${buf.toString('base64')}`
 }
 
+export function removeCachedIcon(id: string): void {
+  rmSync(cacheFile(id), { force: true })
+}
+
+/** Scarica la migliore icona indicata dall'HTML della pagina e la mette in cache. */
+export async function iconFromHtml(id: string, html: string, base: string): Promise<string | undefined> {
+  for (const c of iconCandidates(html, base)) {
+    const data = await download(c.href).catch(() => undefined)
+    if (data) {
+      mkdirSync(cacheDir(), { recursive: true })
+      writeFileSync(cacheFile(id), data, 'utf8')
+      return data
+    }
+  }
+  return undefined
+}
+
 export async function fetchIcon(game: Game): Promise<string | undefined> {
   try {
     const res = await net.fetch(game.url)
     const html = res.ok ? await res.text() : ''
-    for (const c of iconCandidates(html, res.url || game.url)) {
-      const data = await download(c.href).catch(() => undefined)
-      if (data) {
-        mkdirSync(cacheDir(), { recursive: true })
-        writeFileSync(cacheFile(game.id), data, 'utf8')
-        return data
-      }
-    }
+    return await iconFromHtml(game.id, html, res.url || game.url)
   } catch (err) {
     console.warn(`Icona non disponibile per ${game.name}`, err)
   }

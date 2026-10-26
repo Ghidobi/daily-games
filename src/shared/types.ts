@@ -22,6 +22,19 @@ export interface Game {
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 
+/** Impostazioni modificabili dall'utente. */
+export interface UserSettings {
+  themeMode: ThemeMode
+  reminder: { enabled: boolean; /** "HH:MM", ora di Roma */ time: string }
+  /** Chiudendo la finestra l'app resta nell'area di notifica. */
+  closeToTray: boolean
+  /** Avvio automatico con Windows (ridotta nell'area di notifica). */
+  openAtLogin: boolean
+}
+
+/** Modifiche consentite a un gioco della raccolta. */
+export type GamePatch = Partial<Pick<Game, 'name' | 'category' | 'hidden'>> & { accent?: string }
+
 /** Risultato di una partita, ricavato dal testo "Condividi" del gioco. */
 export interface GameResult {
   /** Testo originale copiato dal gioco. */
@@ -59,7 +72,7 @@ export interface GameViewStatus {
 }
 
 /** Pagine dell'app oltre alle schede dei giochi. */
-export type PageId = 'today' | 'stats'
+export type PageId = 'today' | 'stats' | 'collection' | 'settings'
 
 export interface Toast {
   id: number
@@ -79,6 +92,12 @@ export interface AppState {
   icons: Record<string, string>
   views: Record<string, GameViewStatus>
   themeMode: ThemeMode
+  settings: UserSettings
+  version: string
+  /** false in sviluppo (npm run dev): l'avvio con Windows funziona solo nell'app installata. */
+  packaged: boolean
+  /** true nella versione portatile (le notifiche di Windows potrebbero non comparire). */
+  portable: boolean
   /** Messaggio da mostrare (es. accesso Google bloccato). */
   notice?: { gameId: string; text: string }
   toast?: Toast
@@ -87,6 +106,8 @@ export interface AppState {
   /** Serie di giorni consecutivi (totale e per gioco). */
   streaks: { total: number; games: Record<string, number> }
 }
+
+export type AddGameResult = { ok: true; game: Game; warning?: string } | { ok: false; error: string }
 
 /** Esito dell'analisi di un testo incollato a mano. */
 export interface ParsePreview {
@@ -121,4 +142,14 @@ export interface Api {
   dismissToast(id: number): void
   /** Copia negli appunti il riepilogo di oggi; restituisce il testo copiato. */
   shareDay(): Promise<string>
+  /** Aggiunge un gioco dal suo indirizzo. */
+  addGame(url: string): Promise<AddGameResult>
+  updateGame(id: string, patch: GamePatch): void
+  reorderGames(ids: string[]): void
+  removeGame(id: string, clearLogin: boolean): void
+  updateSettings(patch: Partial<Omit<UserSettings, 'themeMode'>>): void
+  /** Mostra una notifica di prova del promemoria. */
+  testReminder(): void
+  exportData(): Promise<{ ok: boolean; path?: string; error?: string }>
+  importData(): Promise<{ ok: boolean; error?: string; canceled?: boolean }>
 }

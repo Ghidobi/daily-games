@@ -1,4 +1,5 @@
 import type { AppState, ThemeMode } from '@shared/types'
+import { useDragReorder, withHidden } from '../dragReorder'
 import { GameIcon } from './GameIcon'
 import { Icon, type IconName } from './Icon'
 
@@ -11,6 +12,18 @@ const THEMES: { mode: ThemeMode; icon: IconName; label: string }[] = [
 export function Sidebar({ state }: { state: AppState }) {
   const games = state.games.filter((g) => !g.hidden)
   const played = games.filter((g) => state.today[g.id]?.played).length
+  const visibleIds = games.map((g) => g.id)
+  const { itemProps } = useDragReorder(visibleIds, (order) =>
+    window.api.reorderGames(withHidden(state.games.map((g) => g.id), order))
+  )
+
+  const page = (id: AppState['active'], icon: IconName, label: string, title: string, extra?: React.ReactNode) => (
+    <button className={`nav-item${state.active === id ? ' active' : ''}`} onClick={() => window.api.open(id)} title={title}>
+      <span className="nav-icon"><Icon name={icon} /></span>
+      <span className="nav-label">{label}</span>
+      {extra}
+    </button>
+  )
 
   return (
     <nav className="sidebar" aria-label="Giochi">
@@ -21,29 +34,19 @@ export function Sidebar({ state }: { state: AppState }) {
         <span className="brand-name">Daily Games</span>
       </div>
 
-      <button
-        className={`nav-item${state.active === 'today' ? ' active' : ''}`}
-        onClick={() => window.api.open('today')}
-        title="Oggi (Ctrl+0)"
-      >
-        <span className="nav-icon"><Icon name="today" /></span>
-        <span className="nav-label">Oggi</span>
-        <span className="nav-count">{played}/{games.length}</span>
-      </button>
-      <button
-        className={`nav-item${state.active === 'stats' ? ' active' : ''}`}
-        onClick={() => window.api.open('stats')}
-        title="Statistiche (Ctrl+Shift+S)"
-      >
-        <span className="nav-icon"><Icon name="chart" /></span>
-        <span className="nav-label">Statistiche</span>
-        {state.streaks.total > 0 && (
+      {page('today', 'today', 'Oggi', 'Oggi (Ctrl+0)', <span className="nav-count">{played}/{games.length}</span>)}
+      {page(
+        'stats',
+        'chart',
+        'Statistiche',
+        'Statistiche (Ctrl+Shift+S)',
+        state.streaks.total > 0 && (
           <span className="nav-count flame" title="Giorni di fila">
             <Icon name="flame" size={13} />
             {state.streaks.total}
           </span>
-        )}
-      </button>
+        )
+      )}
 
       <div className="nav-section">I tuoi giochi</div>
       <ul className="game-list">
@@ -51,12 +54,12 @@ export function Sidebar({ state }: { state: AppState }) {
           const done = !!state.today[game.id]?.played
           const isActive = state.active === game.id
           return (
-            <li key={game.id}>
+            <li key={game.id} {...itemProps(game.id)}>
               <button
                 className={`nav-item game${isActive ? ' active' : ''}`}
                 style={{ '--accent': game.theme.accent } as React.CSSProperties}
                 onClick={() => window.api.open(game.id)}
-                title={i < 9 ? `${game.name} (Ctrl+${i + 1})` : game.name}
+                title={i < 9 ? `${game.name} (Ctrl+${i + 1}) · trascina per riordinare` : game.name}
               >
                 <span className="nav-icon">
                   <GameIcon game={game} src={state.icons[game.id]} size={26} />
@@ -68,6 +71,16 @@ export function Sidebar({ state }: { state: AppState }) {
             </li>
           )
         })}
+        <li>
+          <button
+            className={`nav-item add${state.active === 'collection' ? ' active' : ''}`}
+            onClick={() => window.api.open('collection')}
+            title="Aggiungi, riordina o nascondi i giochi"
+          >
+            <span className="nav-icon"><Icon name="plus" /></span>
+            <span className="nav-label">Gestisci raccolta</span>
+          </button>
+        </li>
       </ul>
 
       <div className="sidebar-foot">
@@ -85,6 +98,14 @@ export function Sidebar({ state }: { state: AppState }) {
             </button>
           ))}
         </div>
+        <button
+          className={`gear${state.active === 'settings' ? ' on' : ''}`}
+          onClick={() => window.api.open('settings')}
+          title="Impostazioni"
+          aria-label="Impostazioni"
+        >
+          <Icon name="gear" size={17} />
+        </button>
       </div>
     </nav>
   )

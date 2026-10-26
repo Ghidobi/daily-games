@@ -27,3 +27,15 @@ export function watchDayChange(onChange: (dayKey: string) => void): () => void {
   }, 30_000)
   return () => clearInterval(timer)
 }
+
+const ROME_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Rome',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23'
+})
+
+/** Ora attuale a Roma nel formato HH:MM. */
+export function romeTime(date = new Date()): string {
+  return ROME_TIME.format(date)
+}

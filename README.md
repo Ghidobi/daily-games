@@ -7,8 +7,8 @@ che resta salvato tra un avvio e l'altro.
 Giochi iniziali: [Spotle Movies](https://spotle.movie/), [Farflung](https://farflung.game/),
 [Krillion](https://krillion.io/), [Spotle TV](https://www.spotle.tv/).
 
-> **Stato:** fase 2 (risultati e statistiche). Gestione della raccolta, promemoria, scoperta di
-> nuovi giochi, installer e aggiornamenti automatici arriveranno nelle fasi successive.
+> **Stato:** fase 3 (raccolta e uso quotidiano). La scoperta di nuovi giochi e gli aggiornamenti
+> automatici arriveranno nelle fasi successive.
 
 ## Cosa fa
 
@@ -29,6 +29,21 @@ Giochi iniziali: [Spotle Movies](https://spotle.movie/), [Farflung](https://farf
   e per ogni gioco storico, percentuale di vittorie, media dei tentativi o dei punteggi.
 - **Condividi la mia giornata:** copia negli appunti un unico messaggio con i risultati di oggi,
   pronto da incollare su WhatsApp.
+- **Raccolta** («Gestisci raccolta» nella barra laterale):
+  - aggiungi un gioco qualsiasi incollando il suo indirizzo: nome, icona e colori vengono letti
+    dal sito (puoi correggerli);
+  - riordina trascinando, qui o direttamente nella barra laterale;
+  - rinomina, cambia categoria e colore, nascondi (resta nella raccolta) o elimina (puoi anche
+    cancellarne l'accesso salvato). Lo storico di un gioco eliminato resta: se lo riaggiungi
+    ritrovi le statistiche.
+- **Impostazioni** (ingranaggio in basso a sinistra):
+  - **promemoria**: notifica di Windows all'ora scelta, solo se non hai finito i giochi;
+  - **area di notifica**: chiudendo la finestra l'app resta attiva vicino all'orologio (tasto
+    destro sull'icona → Esci per chiuderla davvero);
+  - **avvio con Windows** (solo nell'app installata), ridotta nell'area di notifica;
+  - **esporta / importa** raccolta, statistiche e impostazioni in un file JSON, per backup o per
+    passare a un altro PC. Gli accessi ai giochi non sono inclusi. Prima di ogni importazione
+    l'app salva una copia dei dati attuali in `%APPDATA%\Daily Games\backup\`.
 
 ### Come vengono riconosciuti i risultati
 
@@ -120,6 +135,7 @@ pacchetto di installazione**:
   - `data.json`: raccolta dei giochi, stato dei giorni, risultati, impostazioni
   - `Partitions\game-*`: sessioni e accessi dei singoli giochi
   - `icons\`: icone dei giochi scaricate dai siti
+  - `backup\`: copie automatiche fatte prima di importare un backup
 
 Per ricominciare da zero basta chiudere l'app e cancellare quella cartella.
 
@@ -131,17 +147,19 @@ src/
     index.ts      finestra, scorciatoie, comunicazione con l'interfaccia
     gameViews.ts  una vista web per gioco, popup di login, link esterni
     capture.ts    osservazione degli appunti per i risultati
+    addGame.ts    aggiunta di un gioco da URL (nome, icona, colori)
+    system.ts     area di notifica, notifiche, avvio con Windows
     web.ts        user agent, domini di login, regole sui link
     store.ts      salvataggio dei dati (data.json)
     day.ts        giornata secondo il fuso Europe/Rome
     icons.ts      download delle favicon
-    catalog.ts    i giochi iniziali con i loro colori
   preload/
     index.ts      ponte sicuro tra interfaccia e processo principale
     game.ts       nei giochi: intercetta il testo copiato da «Condividi»
   renderer/    interfaccia React (barra laterale, Oggi, Statistiche, schede)
   shared/
     types.ts      tipi condivisi
+    catalog.ts    i giochi iniziali con i loro colori
     results.ts    riconoscimento dei risultati dei giochi
     stats.ts      serie e statistiche
 tests/         test automatici (npm test)
@@ -158,7 +176,7 @@ Crea nella cartella `release/` due file:
 | File | Cosa è |
 |---|---|
 | `Daily-Games-Setup-<versione>.exe` | **Installer**: installa l'app per il tuo utente, con collegamento sul desktop e nel menu Start. Si disinstalla da Impostazioni → App. |
-| `Daily-Games-<versione>-portatile.exe` | **Versione portatile**: un solo file, si avvia con doppio clic senza installare nulla (il primo avvio impiega qualche secondo in più). |
+| `Daily-Games-<versione>-portatile.exe` | **Versione portatile**: un solo file, si avvia con doppio clic senza installare nulla (il primo avvio impiega qualche secondo in più). Windows potrebbe non mostrarne le notifiche del promemoria: per quelle usa l'installer. |
 
 Entrambe usano gli stessi dati in `%APPDATA%\Daily Games\`, quindi accessi e statistiche restano
 anche passando da una all'altra o aggiornando.

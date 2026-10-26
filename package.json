@@ -1,7 +1,7 @@
 {
   "name": "daily-games",
   "productName": "Daily Games",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Tutti i tuoi giochi giornalieri in un'unica app desktop.",
   "main": "out/main/index.js",
   "author": "Daily Games",
@@ -25,6 +25,12 @@
     "files": [
       "out/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
     ],
     "win": {
       "target": [

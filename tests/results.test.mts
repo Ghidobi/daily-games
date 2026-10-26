@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { compactForShare, detectResult, summarize } from '../src/shared/results.ts'
 import { gameStats, overallStats, shiftDay, streaks } from '../src/shared/stats.ts'
-import { DEFAULT_GAMES } from '../src/main/catalog.ts'
+import { DEFAULT_GAMES } from '../src/shared/catalog.ts'
 import type { DaysData } from '../src/shared/types.ts'
 
 const games = DEFAULT_GAMES

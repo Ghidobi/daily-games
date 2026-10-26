@@ -4,6 +4,8 @@ import { Sidebar } from './components/Sidebar'
 import { TodayPage } from './components/TodayPage'
 import { GamePage } from './components/GamePage'
 import { StatsPage } from './components/StatsPage'
+import { CollectionPage } from './components/CollectionPage'
+import { SettingsPage } from './components/SettingsPage'
 import { PasteDialog } from './components/PasteDialog'
 import { Toast } from './components/Toast'
 import { useResolvedTheme } from './theme'
@@ -38,6 +40,10 @@ export function App() {
           <GamePage key={game.id} game={game} state={state} covered={paste !== null} onPaste={openPaste} />
         ) : state.active === 'stats' ? (
           <StatsPage state={state} />
+        ) : state.active === 'collection' ? (
+          <CollectionPage state={state} />
+        ) : state.active === 'settings' ? (
+          <SettingsPage state={state} />
         ) : (
           <TodayPage state={state} onPaste={openPaste} />
         )}

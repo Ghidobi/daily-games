@@ -1,4 +1,4 @@
-import type { Game } from '@shared/types'
+import type { Game } from './types'
 
 // Giochi iniziali. I colori sono ricavati dai siti originali (sfondo, testo, accento);
 // le icone NON sono incluse: vengono scaricate dalla favicon all'avvio.

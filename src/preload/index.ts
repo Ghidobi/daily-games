@@ -21,7 +21,15 @@ const api: Api = {
   saveResult: (gameId, text) => ipcRenderer.send('save-result', gameId, text),
   undoResult: () => ipcRenderer.send('undo-result'),
   dismissToast: (id) => ipcRenderer.send('dismiss-toast', id),
-  shareDay: () => ipcRenderer.invoke('share-day')
+  shareDay: () => ipcRenderer.invoke('share-day'),
+  addGame: (url) => ipcRenderer.invoke('add-game', url),
+  updateGame: (id, patch) => ipcRenderer.send('update-game', id, patch),
+  reorderGames: (ids) => ipcRenderer.send('reorder-games', ids),
+  removeGame: (id, clearLogin) => ipcRenderer.send('remove-game', id, clearLogin),
+  updateSettings: (patch) => ipcRenderer.send('update-settings', patch),
+  testReminder: () => ipcRenderer.send('test-reminder'),
+  exportData: () => ipcRenderer.invoke('export-data'),
+  importData: () => ipcRenderer.invoke('import-data')
 }
 
 contextBridge.exposeInMainWorld('api', api)
