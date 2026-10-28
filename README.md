@@ -1,6 +1,6 @@
 # Daily Games
 
-App desktop per Windows e Mac che raccoglie in un unico posto i giochi giornalieri:
+App desktop per Windows che raccoglie in un unico posto i giochi giornalieri:
 ogni gioco si apre in una scheda propria, con il sito originale, i colori del gioco e l'accesso
 che resta salvato tra un avvio e l'altro.
 
@@ -16,7 +16,6 @@ Scarica l'ultima versione dalla pagina
 |---|---|---|
 | Windows (consigliato) | `Daily-Games-Setup-<versione>.exe` | **automatici**: l'app scarica le nuove versioni da sola e le installa quando la chiudi |
 | Windows senza installare | `Daily-Games-<versione>-portatile.exe` | l'app ti avvisa, ma il nuovo file va scaricato a mano |
-| Mac | `Daily-Games-<versione>-mac.dmg` | l'app ti avvisa, ma il nuovo file va scaricato a mano |
 
 ### L'avviso di sicurezza di Windows
 
@@ -32,15 +31,11 @@ L'app non ha una firma digitale (costa qualche centinaio di euro l'anno), quindi
 
 Gli aggiornamenti successivi si installano da soli, senza rivedere questi avvisi.
 
-### Su Mac
+### Mac
 
-Anche su Mac l'app non è firmata con un certificato Apple. Dopo aver aperto il `.dmg` e
-trascinato Daily Games in Applicazioni, al primo avvio: **tasto destro sull'app → Apri → Apri**.
-Se macOS dice che l'app "è danneggiata", apri il Terminale ed esegui una volta:
-
-```bash
-xattr -cr "/Applications/Daily Games.app"
-```
+La versione per Mac per ora non viene pubblicata. Il progetto è predisposto per compilarla su un
+Mac con `npm run dist:mac` (app non firmata: al primo avvio tasto destro → Apri, oppure
+`xattr -cr "/Applications/Daily Games.app"` dal Terminale), ma non è mai stata provata.
 
 ### Primi passi
 
@@ -281,7 +276,7 @@ Crea nella cartella `release/` due file:
 Entrambe usano gli stessi dati in `%APPDATA%\Daily Games\`, quindi accessi e statistiche restano
 anche passando da una all'altra o aggiornando.
 
-Per la versione Mac serve un Mac (`npm run dist:mac`); di solito la compila GitHub (vedi sotto).
+La versione Mac (sospesa) si compila solo su un Mac, con `npm run dist:mac`.
 
 ## Pubblicare una nuova versione
 
@@ -297,7 +292,7 @@ Il comando aumenta la versione (es. 0.5.0 → 0.6.0; usa `npm run release:patch`
 correzioni, 0.5.0 → 0.5.1), crea il commit e il tag e li carica su GitHub. A quel punto GitHub:
 
 1. crea una release in bozza;
-2. esegue i test e compila Windows (installer + portatile) e Mac (`.dmg` + `.zip`);
+2. esegue i test e compila Windows (installer + portatile);
 3. carica i file e pubblica la release.
 
 Dopo una decina di minuti la nuova versione è sulla pagina Releases e le app installate degli

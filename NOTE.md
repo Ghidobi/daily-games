@@ -12,7 +12,7 @@ App desktop (Electron) che raccoglie in un unico posto i giochi giornalieri: ogn
 in una scheda propria con il sito originale, nei colori del gioco, con l'accesso che resta
 salvato. Giochi iniziali: Spotle Movies, Farflung, Krillion, Spotle TV.
 
-- Interfaccia in **italiano**, Windows (e Mac, vedi problemi aperti).
+- Interfaccia in **italiano**, Windows. La versione Mac è **sospesa** (vedi sotto).
 - Repository **pubblico** (serve per gli aggiornamenti automatici degli amici):
   https://github.com/Ghidobi/daily-games (branch `main`).
 - Ultima versione pubblicata: **0.6.0** (26/10/2026) –
@@ -129,8 +129,8 @@ dei giochi), `src/renderer` (React), `src/shared` (tipi, catalogo, riconoscitori
 ### Fase 5 – Distribuzione (commit `bd87a6f`, `53f2337`)
 - electron-updater: controllo all'avvio e ogni 6 ore, download e installazione alla chiusura
   (solo installer Windows); portatile e Mac ricevono l'avviso con il link.
-- GitHub Actions su tag `v*`: bozza → Windows (test + build + upload) → pubblicazione;
-  Mac in un job separato che **non blocca** Windows.
+- GitHub Actions su tag `v*`: bozza → Windows (test + build + upload) → pubblicazione.
+  Il job Mac (separato, per non bloccare Windows) è stato poi **tolto** il 28/10/2026.
 - Repository creato e pubblicato con GitHub CLI; release **0.5.0** pubblicata (solo Windows).
 
 ### Blocco pubblicità – versione 0.6.0 (commit `f31542f`, `37ecb90`)
@@ -166,12 +166,13 @@ dei giochi), `src/renderer` (React), `src/shared` (tipi, catalogo, riconoscitori
 
 ## 6. Problemi aperti e cose da fare
 
-1. **Versione Mac mai compilata.** Tre tentativi (0.5.0 ×2, 0.6.0) falliti con
-   *"The job was not acquired by Runner of type hosted"*: GitHub non aveva Mac liberi
-   (`macos-latest` = arm64, code lunghe). Opzioni: rilanciare il job
-   (`gh run rerun <id> --failed`), provare un'etichetta diversa (es. un runner Intel), oppure
-   compilare su un Mac con `npm run dist:mac`. Il codice Mac (menu, Dock, firma ad-hoc `"-"`) non
-   è mai stato provato.
+1. **Versione Mac sospesa (decisione del 28/10/2026: per ora non serve).** Tre tentativi su
+   GitHub (0.5.0 ×2, 0.6.0) falliti con *"The job was not acquired by Runner of type hosted"*:
+   GitHub non aveva Mac liberi. Il job Mac è stato tolto dal workflow, così le release non
+   risultano più in errore. Restano nel progetto la configurazione (`build.mac` in
+   `package.json`, `npm run dist:mac`) e il codice per il Mac (menu minimo, Dock, firma ad-hoc
+   `"-"`), mai provati. Per riattivarla: rimettere un job `macos-latest` con
+   `npx electron-builder --mac --publish always` in `release.yml`, oppure compilare su un Mac.
 2. **Primo aggiornamento automatico 0.5.0 → 0.6.0** da verificare su un PC con la 0.5.0
    installata dall'installer.
 3. **Farflung**: verificare il testo vero del pulsante "Condividi" e sistemare il riconoscitore
